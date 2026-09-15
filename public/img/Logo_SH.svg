@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 280 50" width="280" height="50">
+    <defs>
+        <linearGradient id="goldGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stop-color="#d4af37" />
+            <stop offset="50%" stop-color="#b48d56" />
+            <stop offset="100%" stop-color="#9a7645" />
+        </linearGradient>
+    </defs>
+    <!-- Logo Icon / Emblem -->
+    <g transform="translate(5, 5)">
+        <!-- Shield / Emblem Background -->
+        <polygon points="20,0 36,8 36,28 20,40 4,28 4,8" fill="#0b1031" stroke="url(#goldGrad)" stroke-width="2" />
+        <!-- Inner Musical / Guitar Note Motif -->
+        <circle cx="16" cy="24" r="5" fill="url(#goldGrad)" />
+        <path d="M21 24 L21 10 Q26 12 28 8" fill="none" stroke="url(#goldGrad)" stroke-width="2.5" stroke-linecap="round" />
+    </g>
+    <!-- Brand Typography -->
+    <text x="54" y="26" font-family="'Figtree', -apple-system, sans-serif" font-size="18" font-weight="800" fill="#0b1031" letter-spacing="1.5">SOUND HERITAGE</text>
+    <text x="55" y="38" font-family="'Figtree', -apple-system, sans-serif" font-size="8.5" font-weight="600" fill="#b48d56" letter-spacing="3">MUSIC &amp; INSTRUMENTS</text>
+</svg>

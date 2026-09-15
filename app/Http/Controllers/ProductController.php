@@ -3,64 +3,78 @@
 namespace App\Http\Controllers;
 
 use App\Models\Product;
-use App\Http\Requests\StoreProductRequest;
-use App\Http\Requests\UpdateProductRequest;
+use App\Models\PurchaseDetail;
+use Illuminate\Http\Request;
 
 class ProductController extends Controller
 {
-    /**
-     * Display a listing of the resource.
-     */
+    // DICCIONARIO DE MOLDES (TEMPLATES)
+    private $templates = [
+        'Guitarra' => ['madera_cuerpo', 'cantidad_trastes', 'tipo_microfonos'],
+        'Teclado'  => ['cantidad_teclas', 'tiene_midi', 'polifonia'],
+        'Bateria'  => ['cantidad_cuerpos', 'material_cascos']
+    ];
+
     public function index()
     {
-        //
+        return response()->json(Product::all(), 200);
     }
 
-    /**
-     * Show the form for creating a new resource.
-     */
-    public function create()
-    {
-        //
-    }
-
-    /**
-     * Store a newly created resource in storage.
-     */
-    public function store(StoreProductRequest $request)
-    {
-        //
-    }
-
-    /**
-     * Display the specified resource.
-     */
     public function show(Product $product)
     {
-        //
+        return response()->json($product, 200);
     }
 
-    /**
-     * Show the form for editing the specified resource.
-     */
-    public function edit(Product $product)
+    // CREACIÓN RÁPIDA (DESDE EL MODAL)
+    public function storeQuick(Request $request)
     {
-        //
+        $request->validate([
+            'type'          => 'required|string', 
+            'name'          => 'required|string|max:255',
+            'price'         => 'required|numeric|min:0',
+            'template_data' => 'nullable|array'
+        ]);
+
+        $tipo = $request->type;
+        $datosUsuario = $request->template_data ?? [];
+        $specsFinales = [];
+
+        // Rellenamos el molde de forma segura
+        if (array_key_exists($tipo, $this->templates)) {
+            $molde = $this->templates[$tipo];
+            foreach ($molde as $atributo) {
+                $specsFinales[$atributo] = $datosUsuario[$atributo] ?? 'No especificado';
+            }
+        }
+
+        // Creamos el producto (El stock nace en 0 por tu BD)
+        $product = Product::create([
+            'type'  => $tipo,
+            'name'  => $request->name,
+            'price' => $request->price,
+            'specs' => empty($specsFinales) ? null : $specsFinales 
+        ]);
+
+        return response()->json([
+            'message' => 'Producto creado correctamente',
+            'product' => $product
+        ], 201);
     }
 
-    /**
-     * Update the specified resource in storage.
-     */
-    public function update(UpdateProductRequest $request, Product $product)
+    // ELIMINAR UN PRODUCTO CON SEGURIDAD
+    public function destroy($id)
     {
-        //
-    }
+        $product = Product::findOrFail($id);
 
-    /**
-     * Remove the specified resource from storage.
-     */
-    public function destroy(Product $product)
-    {
-        //
+        if ($product->stock > 0) {
+            return response()->json(['error' => 'No puedes eliminar un instrumento que tiene stock disponible.'], 403);
+        }
+
+        if (PurchaseDetail::where('product_id', $id)->exists()) {
+            return response()->json(['error' => 'Este producto está en facturas pasadas. No se puede borrar.'], 403);
+        }
+
+        $product->delete();
+        return response()->json(['message' => 'Producto eliminado correctamente.'], 200);
     }
 }

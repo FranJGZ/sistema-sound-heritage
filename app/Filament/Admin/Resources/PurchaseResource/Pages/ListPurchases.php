@@ -3,12 +3,10 @@
 namespace App\Filament\Admin\Resources\PurchaseResource\Pages;
 
 use App\Filament\Admin\Resources\PurchaseResource;
-use App\Models\Purchase;
 use Filament\Actions;
 use Filament\Resources\Pages\ListRecords;
 use Filament\Resources\Components\Tab;
 use Illuminate\Database\Eloquent\Builder;
-use Illuminate\Database\Eloquent\SoftDeletingScope;
 
 class ListPurchases extends ListRecords
 {
@@ -25,16 +23,13 @@ class ListPurchases extends ListRecords
     {
         return [
             'activas' => Tab::make('Compras Activas')
-                ->modifyQueryUsing(fn (Builder $query) => $query->whereNull('deleted_at'))
-                ->badge(Purchase::query()->whereNull('deleted_at')->count()),
-
+                ->modifyQueryUsing(fn (Builder $query) => $query->whereNull('deleted_at')),
+                
             'anuladas' => Tab::make('Compras Anuladas')
-                ->modifyQueryUsing(fn (Builder $query) => $query->whereNotNull('deleted_at'))
-                ->badge(Purchase::query()->whereNotNull('deleted_at')->count())
-                ->badgeColor('danger'),
-
+                ->modifyQueryUsing(fn (Builder $query) => $query->withTrashed()->whereNotNull('deleted_at')),
+                
             'todas' => Tab::make('Todas')
-                ->badge(Purchase::query()->withoutGlobalScopes([SoftDeletingScope::class])->count()),
+                ->modifyQueryUsing(fn (Builder $query) => $query->withTrashed()),
         ];
     }
 }
