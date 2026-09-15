@@ -61,6 +61,11 @@ require __DIR__.'/auth.php';
 
 Route::resource('supplier', \App\Http\Controllers\SupplierController::class);
 
+Route::get('/suppliers/{supplier}/edit', [App\Http\Controllers\SupplierController::class, 'edit'])
+    ->name('supplier.edit');
+
+Route::put('/suppliers/{supplier}', [App\Http\Controllers\SupplierController::class, 'update'])
+    ->name('supplier.update');
 
 
 

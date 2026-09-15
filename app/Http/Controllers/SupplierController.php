@@ -60,7 +60,11 @@ class SupplierController extends Controller
      */
     public function update(UpdateSupplierRequest $request, Supplier $supplier)
     {
-        //
+        $supplier->name = $request->input('name');
+        $supplier->save();
+
+        return redirect()->route('supplier.index')
+            ->with('success', __('Supplier updated successfully.'));
     }
 
     /**

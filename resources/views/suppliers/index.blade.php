@@ -33,6 +33,9 @@
                                 <td class="p-3 text-gray-600">{{ $item->address ?? 'No asignada' }}</td>
                                 <td class="p-3 text-gray-600">{{ $item->phone ?? 'N/A' }}</td>
                                 <td class="p-3">
+                                    <td>
+                                        <a href="{{ route('supplier.edit', $item->id) }}" class="btn btn-warning btn-sm">Editar</a>
+                                    </td>
                                     <form action="{{ route('supplier.destroy', $item->id) }}" method="POST" onsubmit="return confirm('¿Estás seguro de que deseas eliminar este proveedor?');" class="inline">
                                         @csrf
                                         @method('DELETE')
