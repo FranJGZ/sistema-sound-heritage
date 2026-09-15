@@ -58,16 +58,9 @@ Route::get('/tutorial', function () {
 
 require __DIR__.'/auth.php';
 
-Route::get('/supplier',[App\Http\Controllers\SupplierController::class, 'index'])
-->name('supplier.index');
 
-Route::get('/supplier/create',[App\Http\Controllers\SupplierController::class, 'create'])
-->name('supplier.create');
+Route::resource('supplier', \App\Http\Controllers\SupplierController::class);
 
-Route::get('/supplier',[App\Http\Controllers\SupplierController::class, 'store'])
-->name('supplier.store');
-
-Route::resource('supplier', Supplier\controller::class);
 
 
 

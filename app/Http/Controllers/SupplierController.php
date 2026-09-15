@@ -34,11 +34,9 @@ class SupplierController extends Controller
     $supplier->name = $request->input('name');
     $supplier->address = $request->input('address');
     $supplier->phone = $request->input('phone');
-    dd($request->method(), $request->all());
-    dd($request->all());
     $supplier->save();
 
-    return redirect()->route('supplier.index')->with('success', 'Proveedor creado correctamente.');
+    return redirect()->route('supplier.index')->with('success', 'Supplier created successfully.');
     }
 
     /**
@@ -70,6 +68,8 @@ class SupplierController extends Controller
      */
     public function destroy(Supplier $supplier)
     {
-        //
+        $supplier->delete();
+
+        return redirect()->route('supplier.index')->with('success', __('Supplier deleted successfully.'));
     }
 }
