@@ -5,7 +5,12 @@ use Illuminate\Support\Facades\Schema;
 return new class extends Migration {
     public function up() {
         Schema::create('purchases', function (Blueprint $table) {
-            $table->id(); $table->date('purchase_date'); $table->decimal('total', 10, 2); $table->foreignId('supplier_id')->constrained('suppliers'); $table->timestamps();
+            $table->id(); 
+            $table->date('purchase_date'); 
+            $table->decimal('total', 10, 2)->default(0); 
+            $table->foreignId('supplier_id')->constrained('suppliers');
+            $table->softDeletes();
+            $table->timestamps();
         });
     }
     public function down() { Schema::dropIfExists('purchases'); }

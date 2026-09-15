@@ -1,0 +1,2619 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sound Heritage &bull; Sistema de Gestión Integral</title>
+  <style>
+    :root {
+      --primary: #2563eb;
+      --primary-hover: #1d4ed8;
+      --primary-light: #eff6ff;
+      --sidebar-bg: #0f172a;
+      --sidebar-card: #1e293b;
+      --bg: #f8fafc;
+      --surface: #ffffff;
+      --border: #e2e8f0;
+      --border-input: #cbd5e1;
+      --text: #0f172a;
+      --text-muted: #64748b;
+      --danger: #ef4444;
+      --danger-bg: #fef2f2;
+      --danger-border: #fecaca;
+      --success: #10b981;
+      --success-bg: #ecfdf5;
+      --success-border: #a7f3d0;
+      --warning: #f59e0b;
+      --warning-bg: #fffbeb;
+      --mp-blue: #009ee3;
+      --mp-blue-hover: #007eb5;
+      --radius: 8px;
+      --shadow: 0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04);
+      --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: var(--font);
+      background-color: var(--bg);
+      color: var(--text);
+      height: 100vh;
+      overflow: hidden;
+    }
+
+    .app-layout {
+      display: flex;
+      height: 100vh;
+      width: 100vw;
+    }
+
+    /* BARRA LATERAL (SIDEBAR) */
+    .sidebar {
+      width: 290px;
+      background-color: var(--sidebar-bg);
+      color: #f8fafc;
+      display: flex;
+      flex-direction: column;
+      flex-shrink: 0;
+      border-right: 1px solid #1e293b;
+    }
+
+    .brand {
+      padding: 18px 16px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      border-bottom: 1px solid #1e293b;
+    }
+
+    .brand-icon {
+      width: 38px;
+      height: 38px;
+      background: linear-gradient(135deg, #3b82f6, #1d4ed8);
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.25rem;
+    }
+
+    .brand-text h1 {
+      font-size: 0.95rem;
+      font-weight: 700;
+      color: #ffffff;
+      letter-spacing: -0.2px;
+    }
+
+    .brand-text span {
+      font-size: 0.7rem;
+      color: #94a3b8;
+    }
+
+    .menu {
+      flex: 1;
+      padding: 12px 10px;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      overflow-y: auto;
+    }
+
+    .actor-section-header {
+      font-size: 0.68rem;
+      font-weight: 800;
+      text-transform: uppercase;
+      color: #38bdf8;
+      padding: 14px 10px 4px 10px;
+      letter-spacing: 0.6px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .actor-section-header:first-child {
+      padding-top: 4px;
+    }
+
+    .sidebar-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 9px 12px;
+      border-radius: 6px;
+      color: #cbd5e1;
+      font-size: 0.84rem;
+      cursor: pointer;
+      transition: all 0.15s;
+      user-select: none;
+      border: none;
+      background: none;
+      width: 100%;
+      text-align: left;
+    }
+
+    .sidebar-item:hover {
+      background-color: var(--sidebar-card);
+      color: #ffffff;
+    }
+
+    .sidebar-item.active {
+      background-color: var(--primary);
+      color: #ffffff;
+      font-weight: 600;
+      box-shadow: 0 2px 8px rgba(37, 99, 235, 0.35);
+    }
+
+    .cu-badge {
+      display: inline-block;
+      font-size: 0.68rem;
+      font-weight: 700;
+      background: rgba(255, 255, 255, 0.15);
+      padding: 2px 6px;
+      border-radius: 4px;
+      color: #e2e8f0;
+      margin-right: 4px;
+    }
+
+    .sidebar-item.active .cu-badge {
+      background: #ffffff;
+      color: var(--primary);
+    }
+
+    .system-status-box {
+      margin: 10px;
+      padding: 10px 12px;
+      background-color: var(--sidebar-card);
+      border-radius: 8px;
+      border: 1px solid #334155;
+      font-size: 0.74rem;
+    }
+
+    .status-title {
+      color: #94a3b8;
+      font-weight: 600;
+      margin-bottom: 6px;
+    }
+
+    .status-line {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      color: #cbd5e1;
+      margin-bottom: 3px;
+    }
+
+    .dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background-color: var(--success);
+      box-shadow: 0 0 6px var(--success);
+    }
+
+    .user-card {
+      padding: 12px 16px;
+      border-top: 1px solid #1e293b;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      background-color: #0b1120;
+    }
+
+    .avatar {
+      width: 34px;
+      height: 34px;
+      border-radius: 50%;
+      background-color: #2563eb;
+      color: white;
+      font-weight: 700;
+      font-size: 0.8rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+
+    .user-info h4 {
+      font-size: 0.82rem;
+      color: #ffffff;
+    }
+
+    .user-info span {
+      font-size: 0.72rem;
+      color: #94a3b8;
+    }
+
+    /* ÁREA PRINCIPAL */
+    .main-area {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    .top-nav {
+      height: 62px;
+      background-color: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 0 28px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-shrink: 0;
+    }
+
+    .page-title h2 {
+      font-size: 1.05rem;
+      font-weight: 700;
+      color: var(--text);
+    }
+
+    .page-title span {
+      font-size: 0.78rem;
+      color: var(--text-muted);
+    }
+
+    .top-status-pill {
+      font-size: 0.8rem;
+      color: #475569;
+      background: #f1f5f9;
+      border: 1px solid var(--border);
+      padding: 6px 14px;
+      border-radius: 20px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-weight: 500;
+    }
+
+    .content-scroll {
+      flex: 1;
+      padding: 24px 28px;
+      overflow-y: auto;
+    }
+
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      margin-bottom: 24px;
+      overflow: hidden;
+    }
+
+    .card-head {
+      padding: 16px 20px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .card-head h3 {
+      font-size: 1rem;
+      font-weight: 600;
+    }
+
+    .card-body {
+      padding: 20px;
+    }
+
+    .card-foot {
+      padding: 14px 20px;
+      background-color: #fafbfc;
+      border-top: 1px solid var(--border);
+      display: flex;
+      justify-content: flex-end;
+      align-items: center;
+      gap: 10px;
+    }
+
+    /* Formularios */
+    .form-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      gap: 16px;
+    }
+
+    .form-item {
+      display: flex;
+      flex-direction: column;
+      gap: 5px;
+    }
+
+    .form-item.full {
+      grid-column: 1 / -1;
+    }
+
+    label {
+      font-size: 0.8rem;
+      font-weight: 600;
+      color: #334155;
+    }
+
+    input[type="text"],
+    input[type="number"],
+    input[type="date"],
+    input[type="time"],
+    input[type="email"],
+    select {
+      width: 100%;
+      height: 38px;
+      padding: 0 12px;
+      border: 1px solid var(--border-input);
+      border-radius: 6px;
+      font-size: 0.9rem;
+      font-family: inherit;
+      color: var(--text);
+      background: #ffffff;
+      transition: all 0.15s;
+    }
+
+    input:focus, select:focus {
+      outline: none;
+      border-color: var(--primary);
+      box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
+    }
+
+    .input-has-error {
+      border-color: var(--danger) !important;
+      background-color: #fff8f8 !important;
+    }
+
+    .msg-error {
+      color: var(--danger);
+      font-size: 0.76rem;
+      font-weight: 500;
+      margin-top: 2px;
+      display: none;
+    }
+
+    .msg-error.active {
+      display: block;
+    }
+
+    .input-help {
+      font-size: 0.74rem;
+      color: var(--text-muted);
+    }
+
+    .quick-toggle-bar {
+      display: flex;
+      gap: 8px;
+      margin-top: 5px;
+      flex-wrap: wrap;
+    }
+
+    .quick-btn {
+      background: #f1f5f9;
+      border: 1px solid var(--border);
+      font-size: 0.74rem;
+      padding: 3px 8px;
+      border-radius: 4px;
+      cursor: pointer;
+      color: #475569;
+      transition: all 0.1s;
+    }
+
+    .quick-btn:hover {
+      background: #e2e8f0;
+      color: var(--text);
+    }
+
+    /* Botones */
+    .btn {
+      height: 38px;
+      padding: 0 16px;
+      border-radius: 6px;
+      font-size: 0.85rem;
+      font-weight: 600;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      cursor: pointer;
+      border: 1px solid transparent;
+      user-select: none;
+      text-decoration: none;
+    }
+
+    .btn-primary { background: var(--primary); color: #ffffff; }
+    .btn-primary:hover { background: var(--primary-hover); }
+    .btn-secondary { background: #ffffff; border-color: var(--border-input); color: #334155; }
+    .btn-secondary:hover { background: #f1f5f9; }
+    .btn-success { background: var(--success); color: #ffffff; }
+    .btn-success:hover { background: #059669; }
+    .btn-danger { background: var(--danger); color: #ffffff; }
+    .btn-danger-outline { background: #ffffff; border-color: var(--danger); color: var(--danger); }
+    .btn-disabled { opacity: 0.55; cursor: not-allowed; pointer-events: none; }
+
+    .btn-mp {
+      background: var(--mp-blue);
+      color: #ffffff;
+      font-weight: 700;
+      border: none;
+      box-shadow: 0 2px 6px rgba(0, 158, 227, 0.35);
+    }
+    .btn-mp:hover {
+      background: var(--mp-blue-hover);
+    }
+
+    .btn-sm {
+      height: 30px;
+      padding: 0 10px;
+      font-size: 0.78rem;
+    }
+
+    /* Banners */
+    .banner {
+      padding: 12px 16px;
+      border-radius: 6px;
+      margin-bottom: 18px;
+      font-size: 0.85rem;
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+    }
+
+    .banner-danger {
+      background: var(--danger-bg);
+      border: 1px solid var(--danger-border);
+      color: #991b1b;
+    }
+
+    .banner-success {
+      background: var(--success-bg);
+      border: 1px solid var(--success-border);
+      color: #065f46;
+    }
+
+    /* Badges */
+    .badge {
+      display: inline-block;
+      padding: 3px 8px;
+      border-radius: 12px;
+      font-size: 0.7rem;
+      font-weight: 700;
+      text-transform: uppercase;
+    }
+
+    .badge-success { background: var(--success-bg); color: var(--success); }
+    .badge-danger { background: var(--danger-bg); color: var(--danger); }
+    .badge-info { background: var(--primary-light); color: var(--primary); }
+
+    /* Tablas */
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.86rem;
+      text-align: left;
+    }
+
+    th {
+      background: #f8fafc;
+      padding: 10px 14px;
+      font-weight: 600;
+      color: #475569;
+      border-bottom: 1px solid var(--border);
+    }
+
+    td {
+      padding: 12px 14px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    /* Layout Punto de Venta */
+    .pos-grid {
+      display: grid;
+      grid-template-columns: 1.25fr 1fr;
+      gap: 20px;
+    }
+
+    @media (max-width: 960px) {
+      .pos-grid { grid-template-columns: 1fr; }
+    }
+
+    .prod-card {
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 14px;
+      margin-bottom: 10px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: #ffffff;
+      transition: border-color 0.15s;
+    }
+
+    .prod-card:hover {
+      border-color: var(--primary);
+    }
+
+    .qty-control {
+      display: flex;
+      align-items: center;
+      border: 1px solid var(--border-input);
+      border-radius: 6px;
+      overflow: hidden;
+      background: #ffffff;
+    }
+
+    .qty-btn {
+      width: 28px;
+      height: 30px;
+      border: none;
+      background: #f1f5f9;
+      cursor: pointer;
+      font-size: 0.85rem;
+      font-weight: bold;
+      color: #475569;
+      transition: background 0.1s;
+    }
+
+    .qty-btn:hover {
+      background: #e2e8f0;
+    }
+
+    .qty-input {
+      width: 40px;
+      height: 30px;
+      border: none;
+      text-align: center;
+      font-size: 0.85rem;
+      font-weight: 600;
+      outline: none;
+    }
+
+    .btn-trash {
+      background: none;
+      border: none;
+      color: var(--danger);
+      cursor: pointer;
+      font-size: 1.05rem;
+      padding: 4px;
+      border-radius: 4px;
+      transition: background 0.1s;
+    }
+
+    .btn-trash:hover {
+      background: var(--danger-bg);
+    }
+
+    .ticket {
+      max-width: 500px;
+      margin: 0 auto;
+      background: #ffffff;
+      border: 2px dashed #cbd5e1;
+      border-radius: 8px;
+      padding: 22px;
+    }
+
+    .section-header-box {
+      background: #ffffff;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 18px 22px;
+      margin-bottom: 20px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 14px;
+    }
+
+    /* ============================================================
+       PASARELA DE PAGOS REAL DE MERCADO PAGO (CHECKOUT PRO / BRICKS)
+       ============================================================ */
+    .mp-checkout-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      background: rgba(0, 0, 0, 0.65);
+      backdrop-filter: blur(5px);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 99999;
+      padding: 16px;
+    }
+
+    .mp-checkout-modal {
+      background: #f5f5f5;
+      width: 100%;
+      max-width: 480px;
+      border-radius: 12px;
+      box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.35);
+      overflow: hidden;
+      font-family: var(--font);
+      animation: mpPop 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    @keyframes mpPop {
+      from { transform: scale(0.95); opacity: 0; }
+      to { transform: scale(1); opacity: 1; }
+    }
+
+    .mp-topbar {
+      background: #ffffff;
+      padding: 14px 20px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 1px solid #e5e5e5;
+    }
+
+    .mp-logo-badge {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .mp-handshake {
+      width: 30px;
+      height: 30px;
+      background: #009ee3;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #ffffff;
+      font-size: 1rem;
+    }
+
+    .mp-logo-text {
+      font-size: 1.05rem;
+      font-weight: 800;
+      color: #009ee3;
+      font-style: italic;
+      letter-spacing: -0.5px;
+    }
+
+    .mp-security-seal {
+      font-size: 0.72rem;
+      color: #666;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .mp-summary-bar {
+      background: #009ee3;
+      color: #ffffff;
+      padding: 14px 20px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .mp-summary-bar span {
+      font-size: 0.85rem;
+      opacity: 0.9;
+    }
+
+    .mp-summary-bar strong {
+      font-size: 1.25rem;
+      font-weight: 800;
+    }
+
+    .mp-body {
+      padding: 18px 20px;
+      background: #ffffff;
+      max-height: 80vh;
+      overflow-y: auto;
+    }
+
+    /* Tarjeta Plástica Virtual Interactiva */
+    .mp-plastic-card {
+      background: linear-gradient(135deg, #007eb5 0%, #009ee3 50%, #004b6e 100%);
+      border-radius: 12px;
+      padding: 18px 22px;
+      color: #ffffff;
+      box-shadow: 0 10px 15px -3px rgba(0, 158, 227, 0.4);
+      margin-bottom: 18px;
+      position: relative;
+    }
+
+    .mp-card-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 22px;
+    }
+
+    .mp-card-chip {
+      width: 36px;
+      height: 28px;
+      background: #e2b024;
+      border-radius: 6px;
+      border: 1px solid #c99818;
+      box-shadow: inset 0 0 4px rgba(0,0,0,0.2);
+    }
+
+    .mp-card-brand-logo {
+      font-weight: 800;
+      font-size: 1.15rem;
+      letter-spacing: 1px;
+      font-style: italic;
+    }
+
+    .mp-card-number-display {
+      font-size: 1.15rem;
+      letter-spacing: 2.5px;
+      font-family: monospace;
+      margin-bottom: 16px;
+      text-shadow: 0 1px 2px rgba(0,0,0,0.3);
+    }
+
+    .mp-card-bottom {
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.76rem;
+      text-transform: uppercase;
+      opacity: 0.9;
+    }
+
+    /* Formularios nativos de Mercado Pago */
+    .mp-input-group {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      margin-bottom: 12px;
+    }
+
+    .mp-input-group label {
+      font-size: 0.76rem;
+      color: #333333;
+      font-weight: 600;
+    }
+
+    .mp-input {
+      height: 42px;
+      border: 1px solid #cccccc;
+      border-radius: 6px;
+      padding: 0 12px;
+      font-size: 0.9rem;
+      transition: all 0.15s;
+    }
+
+    .mp-input:focus {
+      border-color: #009ee3;
+      outline: none;
+      box-shadow: 0 0 0 2px rgba(0, 158, 227, 0.2);
+    }
+
+    .mp-btn-pay {
+      width: 100%;
+      height: 46px;
+      background: #009ee3;
+      color: #ffffff;
+      border: none;
+      border-radius: 6px;
+      font-size: 1rem;
+      font-weight: 700;
+      cursor: pointer;
+      margin-top: 8px;
+      transition: background 0.15s;
+    }
+
+    .mp-btn-pay:hover {
+      background: #007eb5;
+    }
+
+    .mp-footer-disclaimer {
+      text-align: center;
+      padding: 12px;
+      font-size: 0.72rem;
+      color: #888888;
+      background: #f8fafc;
+      border-top: 1px solid #e5e5e5;
+    }
+
+    /* Pantalla de éxito oficial de Mercado Pago */
+    .mp-status-screen {
+      text-align: center;
+      padding: 30px 20px;
+    }
+
+    .mp-status-icon {
+      width: 64px;
+      height: 64px;
+      border-radius: 50%;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 2rem;
+      color: #ffffff;
+      margin-bottom: 14px;
+    }
+
+    .mp-icon-success { background: #00a650; }
+    .mp-icon-error { background: #f23d4f; }
+  </style>
+</head>
+<body>
+
+  <div class="app-layout">
+
+    <!-- ==============================================================
+         BARRA LATERAL CON MÓDULOS AGRUPADOS POR ACTOR Y CU
+         ============================================================== -->
+    <aside class="sidebar">
+      
+      <div class="brand">
+        <div class="brand-icon">🎵</div>
+        <div class="brand-text">
+          <h1>SOUND HERITAGE</h1>
+          <span>Sistema Integral de Gestión</span>
+        </div>
+      </div>
+
+      <nav class="menu">
+        
+        <!-- ACTOR: ADMINISTRADOR -->
+        <div class="actor-section-header">👑 Administrador</div>
+        <button type="button" class="sidebar-item active" id="btn-nav-evento" onclick="iniciarModulo('evento')">
+          <span>📅</span>
+          <div>
+            <span class="cu-badge">CU 1</span>
+            <span>Crear evento</span>
+          </div>
+        </button>
+
+        <!-- ACTOR: VENDEDOR -->
+        <div class="actor-section-header">💼 Vendedor</div>
+        <button type="button" class="sidebar-item" id="btn-nav-venta" onclick="iniciarModulo('venta')">
+          <span>🛒</span>
+          <div>
+            <span class="cu-badge">CU 6</span>
+            <span>Registrar venta</span>
+          </div>
+        </button>
+        <button type="button" class="sidebar-item" id="btn-nav-cliente" onclick="iniciarModulo('cliente')">
+          <span>👥</span>
+          <div>
+            <span class="cu-badge">CU 7</span>
+            <span>Registrar cliente</span>
+          </div>
+        </button>
+        <button type="button" class="sidebar-item" id="btn-nav-reserva" onclick="iniciarModulo('reserva')">
+          <span>🏛️</span>
+          <div>
+            <span class="cu-badge">CU 8</span>
+            <span>Registrar reserva salón</span>
+          </div>
+        </button>
+
+        <!-- ACTOR: CLIENTE (PORTAL WEB) -->
+        <div class="actor-section-header">🎟️ Cliente (Portal Web)</div>
+        <button type="button" class="sidebar-item" id="btn-nav-compra" onclick="iniciarModulo('compra')">
+          <span>🌐</span>
+          <div>
+            <span class="cu-badge">CU 13</span>
+            <span>Comprar entrada</span>
+          </div>
+        </button>
+
+        <!-- ACTOR: ENCARGADO DE STOCK -->
+        <div class="actor-section-header">📦 Encargado de Stock</div>
+        <button type="button" class="sidebar-item" id="btn-nav-producto" onclick="iniciarModulo('producto')">
+          <span>🏷️</span>
+          <div>
+            <span class="cu-badge">CU 15</span>
+            <span>Registrar producto</span>
+          </div>
+        </button>
+
+      </nav>
+
+      <!-- Estado Operativo Natural -->
+      <div class="system-status-box">
+        <div class="status-title">
+          <span>Estado del Establecimiento</span>
+        </div>
+        <div class="status-line">
+          <span class="dot"></span>
+          <span>Salón Principal: Disponible</span>
+        </div>
+        <div class="status-line">
+          <span class="dot"></span>
+          <span>Capacidad Salón: 350 personas</span>
+        </div>
+        <div class="status-line">
+          <span class="dot"></span>
+          <span>Inventario: Sincronizado</span>
+        </div>
+      </div>
+
+      <!-- Perfil Dinámico del Actor Activo -->
+      <div class="user-card">
+        <div class="avatar" id="user-avatar">CG</div>
+        <div class="user-info">
+          <h4 id="user-name">Carlos Gómez</h4>
+          <span id="user-role">Administrador</span>
+        </div>
+      </div>
+
+    </aside>
+
+
+    <!-- ==============================================================
+         ÁREA PRINCIPAL DE CONTENIDO
+         ============================================================== -->
+    <main class="main-area">
+
+      <!-- ============================================================
+           1. CU 1: CREAR EVENTO (ADMINISTRADOR)
+           ============================================================ -->
+      <div id="modulo-evento" style="display: flex; flex-direction: column; height: 100%; width: 100%;">
+        
+        <header class="top-nav">
+          <div class="page-title">
+            <h2>Cartelera de Eventos Musicales</h2>
+            <span>Programación de Conciertos y Salón Principal</span>
+          </div>
+          <div class="top-status-pill">
+            <span class="dot"></span>
+            <span>Salón Habilitado</span>
+          </div>
+        </header>
+
+        <div class="content-scroll">
+          
+          <div id="ev-vista-cartelera">
+            <div class="section-header-box">
+              <div>
+                <h3 style="color: var(--text); margin-bottom: 3px;">Cartelera del Salón</h3>
+                <p style="font-size: 0.85rem; color: var(--text-muted);">
+                  Eventos programados para venta al público y reservas de escenario.
+                </p>
+              </div>
+              <button type="button" class="btn btn-primary" onclick="evAbrirFormulario()">
+                ➕ Crear Evento
+              </button>
+            </div>
+
+            <div class="card">
+              <div class="card-head">
+                <h3>Eventos Registrados</h3>
+                <span class="badge badge-info">Temporada 2026</span>
+              </div>
+              <div class="card-body">
+                <table>
+                  <thead>
+                    <tr><th>Código</th><th>Nombre del Evento</th><th>Tipo</th><th>Fecha y Horario</th><th>Precio</th><th>Capacidad</th><th>Estado</th></tr>
+                  </thead>
+                  <tbody id="ev-tabla-cartelera-body">
+                    <tr><td>EV-101</td><td>Noche de Jazz Acústico</td><td>Acústico</td><td>15/10/2026 20:00 hs</td><td>$ 8.500,00</td><td>180 / 200</td><td><span class="badge badge-success">Activo</span></td></tr>
+                    <tr style="background: #fff8f8;"><td>EV-102</td><td>Tributo a Pink Floyd</td><td>Recital</td><td>22/10/2026 21:30 hs</td><td>$ 14.000,00</td><td>320 / 350</td><td><span class="badge badge-danger">Salón Ocupado</span></td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+
+          <div id="ev-vista-formulario" style="display: none;">
+            <div class="banner banner-danger" id="banner-error-evento" style="display: none;">
+              <div>
+                <strong>No se pudo publicar el evento:</strong> Se detectaron inconsistencias en la fecha o el cupo ingresado. Los datos se mantuvieron en pantalla para su corrección.
+              </div>
+            </div>
+
+            <div class="card">
+              <div class="card-head">
+                <h3>Nuevo Evento Musical</h3>
+                <span class="badge badge-info">Ingreso de Datos</span>
+              </div>
+              <div class="card-body">
+                <form id="form-evento" onsubmit="evGuardarEvento(event)">
+                  <div class="form-grid">
+                    <div class="form-item full">
+                      <label for="ev_nombre">Nombre del Evento</label>
+                      <input type="text" id="ev_nombre" placeholder="Ej: Festival Sound Heritage 2026..." required>
+                    </div>
+                    <div class="form-item">
+                      <label for="ev_tipo">Tipo de Evento</label>
+                      <select id="ev_tipo" required>
+                        <option value="">Seleccionar tipo...</option>
+                        <option value="Festival Musical">Festival Musical</option>
+                        <option value="Concierto Eléctrico">Concierto Eléctrico</option>
+                        <option value="Sesión Acústica">Sesión Acústica</option>
+                        <option value="Recital Solista">Recital Solista</option>
+                      </select>
+                    </div>
+                    <div class="form-item">
+                      <label for="ev_precio">Precio por Entrada ($ ARS)</label>
+                      <input type="number" id="ev_precio" placeholder="0.00" step="100" required>
+                    </div>
+                    <div class="form-item">
+                      <label for="ev_fecha">Fecha del Evento</label>
+                      <input type="date" id="ev_fecha" required onchange="limpiarErroresEvento()">
+                      <span class="msg-error" id="error-fecha">❌ El salón ya se encuentra ocupado en esta fecha para "Tributo a Pink Floyd".</span>
+                    </div>
+                    <div class="form-item">
+                      <label for="ev_hora">Hora de Inicio</label>
+                      <input type="time" id="ev_hora" required>
+                    </div>
+                    <div class="form-item full">
+                      <label for="ev_cupo">Cupo de Asistentes</label>
+                      <input type="number" id="ev_cupo" placeholder="Capacidad máxima habilitada: 350 personas" required onchange="limpiarErroresEvento()">
+                      <span class="msg-error" id="error-cupo">❌ El cupo ingresado supera la capacidad máxima autorizada del salón (350 personas).</span>
+                      <span class="input-help">Límite de seguridad del establecimiento: <strong>350 personas</strong>.</span>
+                    </div>
+                  </div>
+
+                  <div style="background: #f8fafc; border: 1px solid var(--border); border-radius: 6px; padding: 12px; margin-top: 16px;">
+                    <span style="font-size: 0.76rem; font-weight: 600; color: #475569; display: block; margin-bottom: 6px;">Probar datos:</span>
+                    <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                      <button type="button" class="quick-btn" onclick="evCargarDatosValidos()">🟢 Cargar datos válidos (28/11 &bull; 300 personas)</button>
+                      <button type="button" class="quick-btn" onclick="evCargarDatosConflicto()">🔴 Probar conflicto (22/10 &bull; 450 personas)</button>
+                    </div>
+                  </div>
+
+                  <div class="card-foot" style="margin-top: 20px; padding: 14px 0 0 0; background: none; border-top: 1px solid var(--border);">
+                    <button type="button" class="btn btn-secondary" onclick="evVolverACartelera()">Cancelar</button>
+                    <button type="submit" class="btn btn-primary">Guardar y Publicar Evento</button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          </div>
+
+          <div id="ev-vista-exito" style="display: none;">
+            <div class="banner banner-success">
+              <div><strong>¡Evento publicado con éxito!</strong> La fecha fue agendada y las localidades quedaron habilitadas para la venta.</div>
+            </div>
+            <div class="card">
+              <div class="card-head">
+                <h3 id="resumen-ev-nombre">Festival Sound Heritage 2026</h3>
+                <span class="badge badge-success" style="font-size: 0.8rem; padding: 5px 12px;">ACTIVO</span>
+              </div>
+              <div class="card-body">
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-bottom: 20px;">
+                  <div style="background: #f8fafc; padding: 14px; border-radius: 6px; border: 1px solid var(--border);">
+                    <span style="font-size: 0.75rem; color: var(--text-muted); display: block;">Fecha y Horario</span>
+                    <strong style="font-size: 0.95rem;" id="resumen-ev-fecha-hora">28/11/2026 &bull; 21:00 hs</strong>
+                  </div>
+                  <div style="background: #f8fafc; padding: 14px; border-radius: 6px; border: 1px solid var(--border);">
+                    <span style="font-size: 0.75rem; color: var(--text-muted); display: block;">Precio por Entrada</span>
+                    <strong style="font-size: 0.95rem; color: var(--primary);" id="resumen-ev-precio">$ 12.500,00 ARS</strong>
+                  </div>
+                  <div style="background: #f8fafc; padding: 14px; border-radius: 6px; border: 1px solid var(--border);">
+                    <span style="font-size: 0.75rem; color: var(--text-muted); display: block;">Capacidad Autorizada</span>
+                    <strong style="font-size: 0.95rem;" id="resumen-ev-cupo">300 / 350 personas</strong>
+                  </div>
+                </div>
+              </div>
+              <div class="card-foot">
+                <button type="button" class="btn btn-secondary" onclick="evVolverACartelera()">Volver a Cartelera</button>
+                <button type="button" class="btn btn-primary" onclick="evAbrirFormulario()">➕ Crear Otro Evento</button>
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+
+      <!-- ============================================================
+           2. CU 6: REGISTRAR VENTA (VENDEDOR)
+           ============================================================ -->
+      <div id="modulo-venta" style="display: none; flex-direction: column; height: 100%; width: 100%;">
+        <header class="top-nav">
+          <div class="page-title">
+            <h2>Punto de Venta &bull; Mostrador</h2>
+            <span>Facturación Presencial y Cobro en Caja 01</span>
+          </div>
+          <div class="top-status-pill">
+            <span class="dot"></span>
+            <span>Caja Operativa</span>
+          </div>
+        </header>
+
+        <div class="content-scroll">
+          
+          <div id="vta-vista-inicio">
+            <div class="section-header-box">
+              <div>
+                <h3 style="color: var(--text); margin-bottom: 3px;">Terminal de Ventas en Mostrador</h3>
+                <p style="font-size: 0.85rem; color: var(--text-muted);">
+                  Caja habilitada para atención de clientes y cobro de mercadería física.
+                </p>
+              </div>
+              <button type="button" class="btn btn-primary" onclick="vtaAbrirCaja()">
+                🛒 Iniciar Venta
+              </button>
+            </div>
+
+            <div class="card">
+              <div class="card-head">
+                <h3>Stock Disponible en Mostrador</h3>
+                <span class="badge badge-success">Inventario Conectado</span>
+              </div>
+              <div class="card-body">
+                <table>
+                  <thead><tr><th>Código</th><th>Producto</th><th>Categoría</th><th>Precio</th><th>Stock Físico</th></tr></thead>
+                  <tbody>
+                    <tr><td>PROD-001</td><td>Fender Stratocaster Sunburst</td><td>Instrumentos</td><td>$ 850.000,00</td><td>3 unidades</td></tr>
+                    <tr><td>PROD-002</td><td>Encordado D'Addario Nickel Wound</td><td>Accesorios</td><td>$ 18.500,00</td><td>25 unidades</td></tr>
+                    <tr style="background: #fffbeb;"><td>PROD-003</td><td>Cable Plug Ernie Ball 6m</td><td>Accesorios</td><td>$ 32.000,00</td><td><span class="badge badge-danger">1 unidad disponible</span></td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+
+          <div id="vta-vista-facturacion" style="display: none;">
+            
+            <div class="banner banner-danger" id="vta-banner-error-stock" style="display: none;">
+              <div><strong>Stock insuficiente:</strong> No es posible agregar la cantidad solicitada porque supera el stock disponible en tienda.</div>
+            </div>
+
+            <div class="pos-grid">
+              <div>
+                <div class="card">
+                  <div class="card-head">
+                    <h3>Catálogo de Productos</h3>
+                    <span class="badge badge-info">Buscar Artículo</span>
+                  </div>
+                  <div class="card-body" id="vta-catalogo-container"></div>
+                </div>
+              </div>
+
+              <div>
+                <div class="card">
+                  <div class="card-head">
+                    <div>
+                      <h3>Orden en Mostrador</h3>
+                      <span style="font-size: 0.76rem; color: var(--text-muted);" id="vta-contador-items">0 ítems</span>
+                    </div>
+                    <button type="button" class="btn btn-secondary btn-sm" onclick="vtaVaciarOrden()">Vaciar</button>
+                  </div>
+                  <div class="card-body">
+                    <table>
+                      <thead><tr><th>Producto</th><th style="text-align: center;">Cant.</th><th style="text-align: right;">Subtotal</th><th style="text-align: center;">Quitar</th></tr></thead>
+                      <tbody id="vta-grilla-body"></tbody>
+                    </table>
+
+                    <div style="background: #f8fafc; border-radius: 6px; padding: 14px; margin: 16px 0; border: 1px solid var(--border);">
+                      <div style="display: flex; justify-content: space-between; font-size: 1.15rem; font-weight: 800; color: var(--primary);">
+                        <span>Total a Cobrar:</span>
+                        <span id="vta-total-calculado">$ 0,00 ARS</span>
+                      </div>
+                    </div>
+
+                    <div style="margin-bottom: 16px;">
+                      <label style="display: block; margin-bottom: 6px;">Forma de Pago:</label>
+                      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+                        <label style="border: 2px solid var(--primary); background: var(--primary-light); padding: 8px; border-radius: 6px; cursor: pointer; display: flex; align-items: center; gap: 6px;">
+                          <input type="radio" name="vta_pago" value="Efectivo" checked style="width: auto; height: auto;">
+                          <span style="font-size: 0.82rem; font-weight: 600;">💵 Efectivo</span>
+                        </label>
+                        <label style="border: 1px solid var(--border); background: #ffffff; padding: 8px; border-radius: 6px; cursor: pointer; display: flex; align-items: center; gap: 6px;">
+                          <input type="radio" name="vta_pago" value="Tarjeta Débito/Crédito" style="width: auto; height: auto;">
+                          <span style="font-size: 0.82rem;">💳 Tarjeta</span>
+                        </label>
+                      </div>
+                    </div>
+
+                    <button type="button" class="btn btn-success" id="vta-btn-confirmar" style="width: 100%; height: 44px; font-size: 0.95rem;" onclick="vtaEmitirTicket()">
+                      Cobrar y Emitir Comprobante
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div id="vta-vista-comprobante" style="display: none;">
+            <div class="banner banner-success">
+              <div><strong>Venta registrada correctamente.</strong> Se emitió el comprobante fiscal y se actualizaron las existencias en inventario.</div>
+            </div>
+            <div class="ticket">
+              <div style="text-align: center; border-bottom: 1px solid #cbd5e1; padding-bottom: 12px; margin-bottom: 12px;">
+                <h3 style="color: var(--primary);">SOUND HERITAGE</h3>
+                <p style="font-size: 0.78rem; color: var(--text-muted);">Instrumentos Musicales & Audio &bull; CUIT: 30-71489234-9</p>
+                <div style="margin-top: 6px;"><span class="badge badge-success">COMPROBANTE FISCAL EMITIDO</span></div>
+              </div>
+              <div style="display: flex; justify-content: space-between; font-size: 0.8rem; margin-bottom: 12px;">
+                <div><strong>Ticket Factura:</strong> #0001-00008432<br><strong id="vta-ticket-fecha"></strong></div>
+                <div style="text-align: right;"><strong>Vendedora:</strong> Laura Gómez<br><strong id="vta-ticket-metodo"></strong></div>
+              </div>
+              <table style="margin-bottom: 12px;">
+                <thead><tr style="border-bottom: 1px solid #000;"><th>Cant.</th><th>Artículo</th><th style="text-align: right;">Total</th></tr></thead>
+                <tbody id="vta-ticket-items"></tbody>
+              </table>
+              <div style="text-align: right; font-size: 1.25rem; font-weight: 800; color: var(--primary);" id="vta-ticket-total"></div>
+            </div>
+            <div class="card" style="margin-top: 20px;">
+              <div class="card-head"><h3>Actualización de Stock en Inventario</h3></div>
+              <div class="card-body">
+                <table>
+                  <thead><tr><th>Artículo</th><th style="text-align: center;">Stock Previo</th><th style="text-align: center;">Unidades Descontadas</th><th style="text-align: center;">Stock Actual</th></tr></thead>
+                  <tbody id="vta-auditoria-stock"></tbody>
+                </table>
+              </div>
+              <div class="card-foot">
+                <button type="button" class="btn btn-primary" onclick="vtaVolverAInicio()">🛒 Nueva Venta</button>
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+
+      <!-- ============================================================
+           3. CU 7: REGISTRAR CLIENTE (VENDEDOR)
+           ============================================================ -->
+      <div id="modulo-cliente" style="display: none; flex-direction: column; height: 100%; width: 100%;">
+        <header class="top-nav">
+          <div class="page-title">
+            <h2>Padrón de Clientes</h2>
+            <span>Directorio de Clientes para Compras y Reservas</span>
+          </div>
+          <div class="top-status-pill">
+            <span class="dot"></span>
+            <span>Padrón Activo</span>
+          </div>
+        </header>
+
+        <div class="content-scroll">
+          
+          <div id="cli-vista-directorio">
+            <div class="section-header-box">
+              <div>
+                <h3 style="color: var(--text); margin-bottom: 3px;">Directorio de Clientes</h3>
+                <p style="font-size: 0.85rem; color: var(--text-muted);">
+                  Clientes registrados en la base de datos de la tienda.
+                </p>
+              </div>
+              <button type="button" class="btn btn-primary" onclick="cliAbrirFormulario()">
+                👥 Nuevo Cliente
+              </button>
+            </div>
+
+            <div class="card">
+              <div class="card-head">
+                <h3>Clientes Registrados</h3>
+                <span class="badge badge-info">Base de Datos</span>
+              </div>
+              <div class="card-body">
+                <table>
+                  <thead><tr><th>ID Cliente</th><th>Nombre y Apellido</th><th>DNI</th><th>Correo Electrónico</th><th>Teléfono</th></tr></thead>
+                  <tbody id="cli-tabla-padron-body">
+                    <tr><td>CLI-2026-0012</td><td>Juan Pérez</td><td>34.567.890</td><td><strong>juan.perez@email.com</strong></td><td>11-4455-8899</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+
+          <div id="cli-vista-formulario" style="display: none;">
+            <div class="banner banner-danger" id="cli-banner-error" style="display: none;">
+              <div><strong>El correo electrónico ya existe:</strong> Este correo ya está asignado a otro cliente en el sistema. Ingrese una dirección diferente.</div>
+            </div>
+
+            <div class="card">
+              <div class="card-head">
+                <h3>Alta de Nuevo Cliente</h3>
+                <span class="badge badge-info">Formulario</span>
+              </div>
+              <div class="card-body">
+                <form onsubmit="cliGuardarCliente(event)">
+                  <div class="form-grid">
+                    <div class="form-item">
+                      <label for="cli_input_nombre">Nombre Completo</label>
+                      <input type="text" id="cli_input_nombre" placeholder="Nombre y Apellido..." required>
+                    </div>
+                    <div class="form-item">
+                      <label for="cli_input_dni">DNI / Documento</label>
+                      <input type="text" id="cli_input_dni" placeholder="Número de documento..." required>
+                    </div>
+                    <div class="form-item">
+                      <label for="cli_input_telefono">Teléfono</label>
+                      <input type="text" id="cli_input_telefono" placeholder="Número de contacto..." required>
+                    </div>
+                    <div class="form-item">
+                      <label for="cli_input_email">Correo Electrónico</label>
+                      <input type="email" id="cli_input_email" placeholder="correo@ejemplo.com" required onchange="cliLimpiarErrores()">
+                      <span class="msg-error" id="cli-error-email">❌ Ya existe un cliente registrado con este correo electrónico (Juan Pérez).</span>
+                    </div>
+                  </div>
+
+                  <div style="background: #f8fafc; border: 1px solid var(--border); border-radius: 6px; padding: 12px; margin-top: 16px;">
+                    <span style="font-size: 0.76rem; font-weight: 600; color: #475569; display: block; margin-bottom: 6px;">Probar datos:</span>
+                    <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                      <button type="button" class="quick-btn" onclick="cliCargarNuevo()">🟢 Cargar datos nuevos (mariana.rodriguez@email.com)</button>
+                      <button type="button" class="quick-btn" onclick="cliCargarDuplicado()">🔴 Probar correo duplicado (juan.perez@email.com)</button>
+                    </div>
+                  </div>
+
+                  <div class="card-foot" style="margin-top: 20px; padding: 14px 0 0 0; background: none; border-top: 1px solid var(--border);">
+                    <button type="button" class="btn btn-secondary" onclick="cliVolverADirectorio()">Cancelar</button>
+                    <button type="submit" class="btn btn-primary">Guardar Cliente</button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          </div>
+
+          <div id="cli-vista-exito" style="display: none;">
+            <div class="banner banner-success">
+              <div><strong>¡Cliente registrado exitosamente!</strong> Se dio de alta en el padrón con su identificador único.</div>
+            </div>
+            <div class="card">
+              <div class="card-head">
+                <h3 id="cli-resumen-nombre">Mariana Rodríguez</h3>
+                <span class="badge badge-success" style="font-size: 0.8rem; padding: 5px 12px;">CLIENTE ACTIVO</span>
+              </div>
+              <div class="card-body">
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-bottom: 20px;">
+                  <div style="background: #f8fafc; padding: 14px; border-radius: 6px; border: 1px solid var(--border);">
+                    <span style="font-size: 0.75rem; color: var(--text-muted); display: block;">ID de Cliente</span>
+                    <strong style="font-size: 1.05rem; color: var(--primary);" id="cli-resumen-id">CLI-2026-0842</strong>
+                  </div>
+                  <div style="background: #f8fafc; padding: 14px; border-radius: 6px; border: 1px solid var(--border);">
+                    <span style="font-size: 0.75rem; color: var(--text-muted); display: block;">DNI</span>
+                    <strong style="font-size: 0.95rem;" id="cli-resumen-dni">38.921.450</strong>
+                  </div>
+                  <div style="background: #f8fafc; padding: 14px; border-radius: 6px; border: 1px solid var(--border);">
+                    <span style="font-size: 0.75rem; color: var(--text-muted); display: block;">Correo Electrónico</span>
+                    <strong style="font-size: 0.95rem;" id="cli-resumen-email">mariana.rodriguez@email.com</strong>
+                  </div>
+                </div>
+              </div>
+              <div class="card-foot">
+                <button type="button" class="btn btn-secondary" onclick="cliVolverADirectorio()">Volver al Padrón</button>
+                <button type="button" class="btn btn-primary" onclick="cliAbrirFormulario()">➕ Registrar Otro Cliente</button>
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+
+      <!-- ============================================================
+           4. CU 8: REGISTRAR RESERVA DE SALÓN (VENDEDOR)
+           ============================================================ -->
+      <div id="modulo-reserva" style="display: none; flex-direction: column; height: 100%; width: 100%;">
+        <header class="top-nav">
+          <div class="page-title">
+            <h2>Agenda de Reservas del Salón</h2>
+            <span>Gestión de Ensayos, Grabaciones y Actividades Musicales</span>
+          </div>
+          <div class="top-status-pill">
+            <span class="dot"></span>
+            <span>Agenda Sincronizada</span>
+          </div>
+        </header>
+
+        <div class="content-scroll">
+          
+          <div id="res-vista-agenda">
+            <div class="section-header-box">
+              <div>
+                <h3 style="color: var(--text); margin-bottom: 3px;">Calendario de Ocupación del Salón</h3>
+                <p style="font-size: 0.85rem; color: var(--text-muted);">
+                  Horarios agendados para ensayos, recitales privados y sesiones de grabación.
+                </p>
+              </div>
+              <button type="button" class="btn btn-primary" onclick="resAbrirFormulario()">
+                🏛️ Nueva Reserva
+              </button>
+            </div>
+
+            <div class="card">
+              <div class="card-head">
+                <h3>Reservas Confirmadas</h3>
+                <span class="badge badge-info">Calendario</span>
+              </div>
+              <div class="card-body">
+                <table>
+                  <thead><tr><th>Fecha</th><th>Horario</th><th>Actividad Programada</th><th>Estado</th></tr></thead>
+                  <tbody>
+                    <tr><td>15/10/2026</td><td>20:00 - 23:00 hs</td><td>Noche de Jazz Acústico</td><td><span class="badge badge-success">Confirmada</span></td></tr>
+                    <tr style="background: #fff8f8;"><td>22/10/2026</td><td>18:00 - 23:30 hs</td><td>Tributo a Pink Floyd</td><td><span class="badge badge-danger">Ocupado</span></td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+
+          <div id="res-vista-formulario" style="display: none;">
+            <div class="banner banner-danger" id="res-banner-error" style="display: none;">
+              <div><strong>Conflicto de fechas:</strong> El salón ya se encuentra ocupado o reservado para esa fecha. Por favor seleccione otro día u horario.</div>
+            </div>
+
+            <div class="card">
+              <div class="card-head">
+                <h3>Agendar Nueva Reserva de Salón</h3>
+                <span class="badge badge-info">Formulario</span>
+              </div>
+              <div class="card-body">
+                <form onsubmit="resGuardarReserva(event)">
+                  <div class="form-grid">
+                    <div class="form-item">
+                      <label for="res_input_fecha">Fecha Solicitada</label>
+                      <input type="date" id="res_input_fecha" required onchange="resLimpiarErrores()">
+                      <span class="msg-error" id="res-error-fecha">❌ El salón ya está ocupado en la fecha 22/10/2026.</span>
+                    </div>
+                    <div class="form-item">
+                      <label>Horario (Desde - Hasta)</label>
+                      <div style="display: flex; gap: 8px;">
+                        <input type="time" id="res_hora_desde" required>
+                        <input type="time" id="res_hora_hasta" required>
+                      </div>
+                    </div>
+                    <div class="form-item">
+                      <label for="res_input_cliente">Cliente Solicitante</label>
+                      <input type="text" id="res_input_cliente" placeholder="Nombre o ID de cliente..." required>
+                    </div>
+                    <div class="form-item">
+                      <label for="res_input_tematica">Temática / Uso</label>
+                      <select id="res_input_tematica" required>
+                        <option value="">Seleccionar temática...</option>
+                        <option value="Ensayo General de Banda con Sonido">Ensayo General de Banda con Sonido</option>
+                        <option value="Grabación Acústica de Estudio">Grabación Acústica de Estudio</option>
+                        <option value="Masterclass de Guitarra y Percusión">Masterclass de Guitarra y Percusión</option>
+                        <option value="Evento Privado Acústico">Evento Privado Acústico</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div style="background: #f8fafc; border: 1px solid var(--border); border-radius: 6px; padding: 12px; margin-top: 16px;">
+                    <span style="font-size: 0.76rem; font-weight: 600; color: #475569; display: block; margin-bottom: 6px;">Probar disponibilidad:</span>
+                    <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                      <button type="button" class="quick-btn" onclick="resCargarDisponible()">🟢 Fecha libre (15/11/2026)</button>
+                      <button type="button" class="quick-btn" onclick="resCargarOcupada()">🔴 Fecha ocupada (22/10/2026)</button>
+                    </div>
+                  </div>
+
+                  <div class="card-foot" style="margin-top: 20px; padding: 14px 0 0 0; background: none; border-top: 1px solid var(--border);">
+                    <button type="button" class="btn btn-secondary" onclick="resVolverAAgenda()">Cancelar</button>
+                    <button type="submit" class="btn btn-primary">Confirmar Reserva</button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          </div>
+
+          <div id="res-vista-exito" style="display: none;">
+            <div class="banner banner-success">
+              <div><strong>¡Reserva agendada correctamente!</strong> El salón quedó bloqueado para esa fecha y horario.</div>
+            </div>
+            <div class="card">
+              <div class="card-head">
+                <h3 id="res-resumen-tematica">Ensayo General de Banda</h3>
+                <span class="badge badge-success" style="font-size: 0.8rem; padding: 5px 12px;">CONFIRMADA</span>
+              </div>
+              <div class="card-body">
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-bottom: 20px;">
+                  <div style="background: #f8fafc; padding: 14px; border-radius: 6px; border: 1px solid var(--border);">
+                    <span style="font-size: 0.75rem; color: var(--text-muted); display: block;">Código de Reserva</span>
+                    <strong style="font-size: 1.05rem; color: var(--primary);">RES-2026-041</strong>
+                  </div>
+                  <div style="background: #f8fafc; padding: 14px; border-radius: 6px; border: 1px solid var(--border);">
+                    <span style="font-size: 0.75rem; color: var(--text-muted); display: block;">Fecha y Horario</span>
+                    <strong style="font-size: 0.95rem;" id="res-resumen-horario">15/11/2026 &bull; 18:00 a 22:00 hs</strong>
+                  </div>
+                  <div style="background: #f8fafc; padding: 14px; border-radius: 6px; border: 1px solid var(--border);">
+                    <span style="font-size: 0.75rem; color: var(--text-muted); display: block;">Cliente</span>
+                    <strong style="font-size: 0.95rem;" id="res-resumen-cliente">Mariana Rodríguez</strong>
+                  </div>
+                </div>
+              </div>
+              <div class="card-foot">
+                <button type="button" class="btn btn-secondary" onclick="resVolverAAgenda()">Volver a Agenda</button>
+                <button type="button" class="btn btn-primary" onclick="resAbrirFormulario()">🏛️ Nueva Reserva</button>
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+
+      <!-- ============================================================
+           5. CU 13: COMPRAR ENTRADA (MERCADO PAGO REAL CHECKOUT)
+           ============================================================ -->
+      <div id="modulo-compra" style="display: none; flex-direction: column; height: 100%; width: 100%;">
+        <header class="top-nav">
+          <div class="page-title">
+            <h2>Boletería Web &bull; Entradas Online</h2>
+            <span>Venta Oficial de Tickets Digitales</span>
+          </div>
+          <div class="top-status-pill">
+            <span class="dot"></span>
+            <span>Boletería Online</span>
+          </div>
+        </header>
+
+        <div class="content-scroll">
+          
+          <div id="comp-vista-cartelera">
+            <div class="section-header-box">
+              <div>
+                <h3 style="color: var(--text); margin-bottom: 3px;">Cartelera de Conciertos</h3>
+                <p style="font-size: 0.85rem; color: var(--text-muted);">
+                  Compra tus entradas oficiales online con confirmación inmediata y código QR de acceso.
+                </p>
+              </div>
+            </div>
+
+            <div class="card">
+              <div class="card-head">
+                <h3>Eventos con Entradas a la Venta</h3>
+                <span class="badge badge-success">Venta Habilitada</span>
+              </div>
+              <div class="card-body">
+                <div style="border: 1px solid var(--border); border-radius: 8px; padding: 20px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 16px;">
+                  <div>
+                    <span class="badge badge-info" style="margin-bottom: 6px;">Festival Musical</span>
+                    <h3 style="font-size: 1.25rem; color: var(--primary);">Festival Sound Heritage 2026 - Edición Aniversario</h3>
+                    <p style="font-size: 0.85rem; color: var(--text-muted); margin-top: 4px;">
+                      Fecha: <strong>28/11/2026 21:00 hs</strong> &bull; Salón Principal Sound Heritage &bull; Disponibles: <strong style="color: var(--success);" id="comp-txt-cupo-cartelera">40 entradas restantes</strong>
+                    </p>
+                    <div style="font-size: 1.2rem; font-weight: 800; color: var(--text); margin-top: 6px;">
+                      $ 12.500,00 ARS <span style="font-size: 0.8rem; font-weight: normal; color: var(--text-muted);">por entrada</span>
+                    </div>
+                  </div>
+                  <button type="button" class="btn btn-primary" onclick="compAbrirFicha()">
+                    🎟️ Comprar Entradas
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div id="comp-vista-ficha-y-pago" style="display: none;">
+            
+            <div class="banner banner-danger" id="comp-banner-error-cupo" style="display: none;">
+              <div><strong>Cupo no disponible:</strong> La cantidad de entradas solicitada supera las localidades disponibles para este evento (quedan 40 entradas).</div>
+            </div>
+
+            <div class="banner banner-danger" id="comp-banner-error-pago" style="display: none;">
+              <div><strong>Pago no aprobado:</strong> Tu entidad bancaria rechazó la operación por fondos insuficientes o límite excedido. Por favor intenta con otra tarjeta.</div>
+            </div>
+
+            <div class="pos-grid">
+              <div>
+                <div class="card">
+                  <div class="card-head">
+                    <h3>Detalle del Evento</h3>
+                    <span class="badge badge-success">Confirmado</span>
+                  </div>
+                  <div class="card-body">
+                    <h3 style="color: var(--primary); margin-bottom: 6px;">Festival Sound Heritage 2026</h3>
+                    <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 12px;">Salón Principal &bull; Clasificación: Rock y Fusión &bull; Apertura: 21:00 hs</p>
+                    
+                    <div style="background: #f8fafc; padding: 14px; border-radius: 6px; border: 1px solid var(--border); margin-bottom: 14px;">
+                      <div style="display: flex; justify-content: space-between; font-size: 0.85rem; margin-bottom: 4px;">
+                        <span>Precio individual:</span>
+                        <strong style="color: var(--primary);">$ 12.500,00 ARS</strong>
+                      </div>
+                      <div style="display: flex; justify-content: space-between; font-size: 0.85rem;">
+                        <span>Localidades disponibles:</span>
+                        <strong style="color: var(--success);" id="comp-txt-cupo-ficha">40 entradas restantes</strong>
+                      </div>
+                    </div>
+
+                    <label style="display: block; margin-bottom: 6px;">Cantidad de Entradas:</label>
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                      <div class="qty-control" style="width: 120px;">
+                        <button type="button" class="qty-btn" onclick="compModificarQty(-1)">-</button>
+                        <input type="number" id="comp-input-qty" class="qty-input" value="2" min="1" onchange="compRecalcularTotal()">
+                        <button type="button" class="qty-btn" onclick="compModificarQty(1)">+</button>
+                      </div>
+                      <span style="font-size: 0.85rem; color: var(--text-muted);">entradas</span>
+                    </div>
+
+                    <div class="quick-toggle-bar" style="margin-top: 10px;">
+                      <span style="font-size: 0.76rem; color: var(--text-muted); align-self: center;">Probar cupo:</span>
+                      <button type="button" class="quick-btn" onclick="compProbarQty(2)">🟢 Cantidad normal (2 entradas)</button>
+                      <button type="button" class="quick-btn" onclick="compProbarQty(50)">🔴 Exceso de cupo (50 entradas)</button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div>
+                <div class="card">
+                  <div class="card-head">
+                    <h3>Resumen de la Orden</h3>
+                    <span style="font-size: 0.78rem; color: var(--text-muted);">Pago Digital</span>
+                  </div>
+                  <div class="card-body">
+                    <div style="background: #f0fdf4; padding: 14px; border-radius: 8px; margin-bottom: 16px; border: 1px solid #bbf7d0;">
+                      <div style="display: flex; justify-content: space-between; font-size: 1.2rem; font-weight: 800; color: #15803d;">
+                        <span>Total a Pagar:</span>
+                        <span id="comp-txt-total">$ 25.000,00 ARS</span>
+                      </div>
+                      <span style="font-size: 0.76rem; color: #166534; display: block; margin-top: 4px;">
+                        Titular: <strong>Martín Rivas</strong> (martin.rivas@email.com)
+                      </span>
+                    </div>
+
+                    <div style="background: #f8fafc; border: 1px solid var(--border); border-radius: 8px; padding: 16px; margin-bottom: 18px;">
+                      <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
+                        <span style="font-size: 0.86rem; font-weight: 700; color: #009ee3;">mercado pago</span>
+                        <span style="font-size: 0.7rem; color: #64748b; background: #e2e8f0; padding: 2px 6px; border-radius: 4px;">Checkout Oficial</span>
+                      </div>
+                      <p style="font-size: 0.76rem; color: var(--text-muted); line-height: 1.45;">
+                        Paga de forma 100% segura a través de <strong>Mercado Pago</strong> con tarjeta de débito, crédito en cuotas o dinero en cuenta. Sound Heritage no almacena ningún dato bancario.
+                      </p>
+                      <div style="display: flex; gap: 8px; margin-top: 10px; font-size: 0.72rem; color: #475569; font-weight: 600;">
+                        <span>💳 Hasta 6 cuotas</span> &bull; <span>🔒 Cifrado SSL 256-bit</span>
+                      </div>
+                    </div>
+
+                    <div style="display: flex; gap: 8px;">
+                      <button type="button" class="btn btn-secondary" onclick="compVolverACartelera()">Volver</button>
+                      <button type="button" class="btn btn-mp" style="flex: 1; height: 46px; font-size: 0.95rem;" onclick="abrirMercadoPago()">
+                        Pagar con Mercado Pago &rarr;
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div id="comp-vista-exito" style="display: none;">
+            <div class="banner banner-success">
+              <div><strong>¡Pago aprobado en Mercado Pago!</strong> Tu entrada digital ya fue emitida y el cupo del evento fue actualizado.</div>
+            </div>
+            <div class="ticket">
+              <div style="text-align: center; border-bottom: 1px solid #cbd5e1; padding-bottom: 12px; margin-bottom: 12px;">
+                <h3 style="color: var(--primary);">TICKET DIGITAL DE ACCESO</h3>
+                <p style="font-size: 0.78rem; color: var(--text-muted);">Sound Heritage &bull; Boletería Oficial</p>
+                <div style="margin-top: 6px;"><span class="badge badge-success">PAGO ACREDITADO &bull; MERCADO PAGO</span></div>
+              </div>
+              <div style="text-align: center; margin: 14px 0;">
+                <div style="display: inline-block; padding: 12px; background: #f8fafc; border: 2px dashed var(--border-input); border-radius: 8px;">
+                  <div style="font-size: 2.2rem;">📱 [QR]</div>
+                  <strong style="font-size: 0.8rem; letter-spacing: 1px; color: var(--text-muted);">SH-EV103-TKT-98412</strong>
+                </div>
+              </div>
+              <div style="font-size: 0.85rem; line-height: 1.6; margin-bottom: 12px;">
+                <strong>Evento:</strong> Festival Sound Heritage 2026<br>
+                <strong>Entradas:</strong> <span id="comp-resumen-cant">2</span> entradas generales<br>
+                <strong>Titular:</strong> Martín Rivas<br>
+                <strong>Total Pagado:</strong> <span id="comp-resumen-total">$ 25.000,00 ARS</span><br>
+                <span style="font-size: 0.76rem; color: var(--text-muted);">Nro. Operación Mercado Pago: <strong>#6842109432</strong></span>
+              </div>
+              <div style="background: #f8fafc; padding: 10px; border-radius: 6px; font-size: 0.76rem; color: var(--text-muted); text-align: center;">
+                Cupo restante actualizado: <strong style="color: var(--primary);" id="comp-resumen-cupo-reducido">38 entradas</strong>
+              </div>
+            </div>
+            <div style="text-align: center; margin-top: 18px;">
+              <button type="button" class="btn btn-primary" onclick="compVolverACartelera()">Volver a la Cartelera</button>
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+
+      <!-- ============================================================
+           6. CU 15: REGISTRAR PRODUCTO (ENCARGADO DE STOCK)
+           ============================================================ -->
+      <div id="modulo-producto" style="display: none; flex-direction: column; height: 100%; width: 100%;">
+        <header class="top-nav">
+          <div class="page-title">
+            <h2>Inventario de Existencias</h2>
+            <span>Control de Almacén, Instrumentos y Accesorios</span>
+          </div>
+          <div class="top-status-pill">
+            <span class="dot"></span>
+            <span>Almacén Central</span>
+          </div>
+        </header>
+
+        <div class="content-scroll">
+          
+          <div id="prod-vista-tabla">
+            <div class="section-header-box">
+              <div>
+                <h3 style="color: var(--text); margin-bottom: 3px;">Existencias en Inventario</h3>
+                <p style="font-size: 0.85rem; color: var(--text-muted);">
+                  Listado de artículos disponibles para reposición y venta en el local.
+                </p>
+              </div>
+              <button type="button" class="btn btn-primary" onclick="prodAbrirFormulario()">
+                📦 Nuevo Producto
+              </button>
+            </div>
+
+            <div class="card">
+              <div class="card-head">
+                <h3>Artículos en Stock</h3>
+                <span class="badge badge-info">Almacén Central</span>
+              </div>
+              <div class="card-body">
+                <table>
+                  <thead><tr><th>Código SKU</th><th>Nombre del Producto</th><th>Categoría</th><th>Precio Unitario</th><th>Stock Físico</th></tr></thead>
+                  <tbody id="prod-tabla-existencias-body">
+                    <tr><td>PROD-001</td><td>Fender Stratocaster Sunburst</td><td>Instrumentos Musicales</td><td>$ 850.000,00</td><td>3 unidades</td></tr>
+                    <tr><td>PROD-002</td><td>Encordado D'Addario Nickel Wound</td><td>Accesorios y Cuerdas</td><td>$ 18.500,00</td><td>25 unidades</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+
+          <div id="prod-vista-formulario" style="display: none;">
+            <div class="banner banner-danger" id="prod-banner-error" style="display: none;">
+              <div><strong>Código SKU ya registrado:</strong> Este código identificatorio ya pertenece a otro artículo en el catálogo. Ingrese un código único.</div>
+            </div>
+
+            <div class="card">
+              <div class="card-head">
+                <h3>Registrar Nuevo Producto</h3>
+                <span class="badge badge-info">Alta de Artículo</span>
+              </div>
+              <div class="card-body">
+                <form onsubmit="prodGuardarProducto(event)">
+                  <div class="form-grid">
+                    <div class="form-item">
+                      <label for="prod_input_sku">Código / SKU</label>
+                      <input type="text" id="prod_input_sku" placeholder="Ej: PROD-006..." required onchange="prodLimpiarErrores()">
+                      <span class="msg-error" id="prod-error-sku">❌ El código PROD-001 ya pertenece a "Fender Stratocaster Sunburst".</span>
+                    </div>
+                    <div class="form-item">
+                      <label for="prod_input_nombre">Descripción o Nombre del Artículo</label>
+                      <input type="text" id="prod_input_nombre" placeholder="Nombre completo del artículo..." required>
+                    </div>
+                    <div class="form-item">
+                      <label for="prod_input_cat">Categoría</label>
+                      <select id="prod_input_cat" required>
+                        <option value="">Seleccionar categoría...</option>
+                        <option value="Instrumentos Musicales">Instrumentos Musicales</option>
+                        <option value="Accesorios y Cuerdas">Accesorios y Cuerdas</option>
+                        <option value="Equipos de Sonido">Equipos de Sonido</option>
+                        <option value="Repuestos y Luthiería">Repuestos y Luthiería</option>
+                        <option value="Artículos de Merchandising">Artículos de Merchandising</option>
+                      </select>
+                    </div>
+                    <div class="form-item">
+                      <label for="prod_input_precio">Precio al Público ($ ARS)</label>
+                      <input type="number" id="prod_input_precio" placeholder="0.00" step="100" required>
+                    </div>
+                    <div class="form-item full">
+                      <label for="prod_input_stock">Stock Inicial (Unidades)</label>
+                      <input type="number" id="prod_input_stock" placeholder="Cantidad que ingresa a almacén..." min="1" required>
+                    </div>
+                  </div>
+
+                  <div style="background: #f8fafc; border: 1px solid var(--border); border-radius: 6px; padding: 12px; margin-top: 16px;">
+                    <span style="font-size: 0.76rem; font-weight: 600; color: #475569; display: block; margin-bottom: 6px;">Probar datos:</span>
+                    <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                      <button type="button" class="quick-btn" onclick="prodCargarNuevo()">🟢 Producto nuevo (SKU PROD-006 &bull; Bajo Fender)</button>
+                      <button type="button" class="quick-btn" onclick="prodCargarDuplicado()">🔴 Probar código duplicado (SKU PROD-001)</button>
+                    </div>
+                  </div>
+
+                  <div class="card-foot" style="margin-top: 20px; padding: 14px 0 0 0; background: none; border-top: 1px solid var(--border);">
+                    <button type="button" class="btn btn-secondary" onclick="prodVolverATabla()">Cancelar</button>
+                    <button type="submit" class="btn btn-primary">Guardar en Inventario</button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          </div>
+
+          <div id="prod-vista-exito" style="display: none;">
+            <div class="banner banner-success">
+              <div><strong>¡Producto incorporado al inventario!</strong> El artículo quedó registrado en existencias y disponible para venta.</div>
+            </div>
+            <div class="card">
+              <div class="card-head">
+                <h3 id="prod-resumen-nombre">Bajo Eléctrico Fender Precision Bass Player</h3>
+                <span class="badge badge-success" style="font-size: 0.8rem; padding: 5px 12px;">EN INVENTARIO</span>
+              </div>
+              <div class="card-body">
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 16px; margin-bottom: 20px;">
+                  <div style="background: #f8fafc; padding: 14px; border-radius: 6px; border: 1px solid var(--border);">
+                    <span style="font-size: 0.75rem; color: var(--text-muted); display: block;">Código SKU</span>
+                    <strong style="font-size: 1.05rem; color: var(--primary);" id="prod-resumen-sku">PROD-006</strong>
+                  </div>
+                  <div style="background: #f8fafc; padding: 14px; border-radius: 6px; border: 1px solid var(--border);">
+                    <span style="font-size: 0.75rem; color: var(--text-muted); display: block;">Categoría</span>
+                    <strong style="font-size: 0.95rem;" id="prod-resumen-cat">Instrumentos Musicales</strong>
+                  </div>
+                  <div style="background: #f8fafc; padding: 14px; border-radius: 6px; border: 1px solid var(--border);">
+                    <span style="font-size: 0.75rem; color: var(--text-muted); display: block;">Precio al Público</span>
+                    <strong style="font-size: 0.95rem; color: var(--primary);" id="prod-resumen-precio">$ 920.000,00 ARS</strong>
+                  </div>
+                  <div style="background: #f8fafc; padding: 14px; border-radius: 6px; border: 1px solid var(--border);">
+                    <span style="font-size: 0.75rem; color: var(--text-muted); display: block;">Stock Inicial</span>
+                    <strong style="font-size: 0.95rem; color: var(--success);" id="prod-resumen-stock">4 unidades</strong>
+                  </div>
+                </div>
+              </div>
+              <div class="card-foot">
+                <button type="button" class="btn btn-secondary" onclick="prodVolverATabla()">Volver a Existencias</button>
+                <button type="button" class="btn btn-primary" onclick="prodAbrirFormulario()">📦 Registrar Otro Producto</button>
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+    </main>
+
+  </div>
+
+
+  <!-- ================================================================
+       PASARELA OFICIAL MERCADO PAGO CHECKOUT PRO / BRICKS (REAL)
+       ================================================================ -->
+  <div class="mp-checkout-overlay" id="mp-modal-overlay">
+    <div class="mp-checkout-modal">
+      
+      <!-- Barra superior de Mercado Pago -->
+      <div class="mp-topbar">
+        <div class="mp-logo-badge">
+          <div class="mp-handshake">🤝</div>
+          <span class="mp-logo-text">mercado pago</span>
+        </div>
+        <div class="mp-security-seal">
+          <span>🔒 Pago 100% seguro</span>
+        </div>
+      </div>
+
+      <!-- Barra de importe oficial -->
+      <div class="mp-summary-bar">
+        <span>Pagarás a Sound Heritage</span>
+        <strong id="mp-txt-total">$ 25.000,00</strong>
+      </div>
+
+      <!-- Pantalla 1: Formulario nativo con tarjeta interactiva -->
+      <div class="mp-body" id="mp-screen-form">
+        
+        <!-- Tarjeta Interactiva Mercado Pago -->
+        <div class="mp-plastic-card">
+          <div class="mp-card-top">
+            <div class="mp-card-chip"></div>
+            <div class="mp-card-brand-logo" id="mp-card-logo">VISA</div>
+          </div>
+          <div class="mp-card-number-display" id="mp-card-number-preview">
+            •••• •••• •••• 1234
+          </div>
+          <div class="mp-card-bottom">
+            <div>
+              <span style="font-size: 0.65rem; display: block; opacity: 0.8;">Titular</span>
+              <strong id="mp-card-name-preview">MARTÍN RIVAS</strong>
+            </div>
+            <div>
+              <span style="font-size: 0.65rem; display: block; opacity: 0.8;">Vence</span>
+              <strong id="mp-card-exp-preview">08/29</strong>
+            </div>
+          </div>
+        </div>
+
+        <form onsubmit="mpEjecutarPago(event)">
+          <div class="mp-input-group">
+            <label>Número de tarjeta</label>
+            <input type="text" class="mp-input" id="mp_card_num" value="4500 8921 4450 1234" maxlength="19" required oninput="mpActualizarNumero(this.value)">
+          </div>
+
+          <div class="mp-input-group">
+            <label>Nombre y apellido como figura en la tarjeta</label>
+            <input type="text" class="mp-input" id="mp_card_name" value="Martín Rivas" required oninput="document.getElementById('mp-card-name-preview').textContent = this.value.toUpperCase() || 'TITULAR'">
+          </div>
+
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+            <div class="mp-input-group">
+              <label>Vencimiento (MM/AA)</label>
+              <input type="text" class="mp-input" id="mp_card_exp" value="08/29" maxlength="5" required oninput="document.getElementById('mp-card-exp-preview').textContent = this.value || 'MM/AA'">
+            </div>
+            <div class="mp-input-group">
+              <label>Código de seguridad</label>
+              <input type="text" class="mp-input" id="mp_card_cvv" value="382" maxlength="4" placeholder="3 dígitos al dorso" required>
+            </div>
+          </div>
+
+          <div class="mp-input-group">
+            <label>DNI del titular de la tarjeta</label>
+            <input type="text" class="mp-input" value="37.892.410" required>
+          </div>
+
+          <div class="mp-input-group">
+            <label>Cuotas</label>
+            <select class="mp-input" id="mp-select-cuotas" style="height: 42px;">
+              <option selected>1 cuota de $ 25.000,00 (Sin interés)</option>
+              <option>3 cuotas de $ 8.333,33 (Sin interés)</option>
+              <option>6 cuotas fijas de $ 4.950,00</option>
+            </select>
+          </div>
+
+          <div style="background: #f1f5f9; border: 1px solid #cbd5e1; border-radius: 6px; padding: 10px; margin: 12px 0;">
+            <span style="font-size: 0.72rem; font-weight: 700; color: #334155; display: block; margin-bottom: 4px;">Simular respuesta de Mercado Pago:</span>
+            <div style="display: flex; gap: 6px;">
+              <button type="button" class="quick-btn" onclick="mpSetearSimulacion(true)">🟢 Pago Aprobado</button>
+              <button type="button" class="quick-btn" onclick="mpSetearSimulacion(false)">🔴 Tarjeta Rechazada</button>
+            </div>
+          </div>
+
+          <button type="submit" class="mp-btn-pay" id="mp-btn-submit">
+            Pagar
+          </button>
+          
+          <button type="button" style="width: 100%; background: none; border: none; color: #009ee3; font-size: 0.85rem; font-weight: 600; padding: 10px; cursor: pointer; margin-top: 4px;" onclick="cerrarMercadoPago()">
+            Cancelar y volver a Sound Heritage
+          </button>
+        </form>
+
+      </div>
+
+      <!-- Pantalla 2: Procesando pago -->
+      <div class="mp-body mp-status-screen" id="mp-screen-loading" style="display: none;">
+        <div style="font-size: 2.5rem; margin-bottom: 12px; animation: spin 1s linear infinite;">⏳</div>
+        <h3 style="color: #333333; margin-bottom: 6px;">Procesando tu pago...</h3>
+        <p style="font-size: 0.82rem; color: #666666;">Estamos conectando de forma segura con tu entidad bancaria.</p>
+      </div>
+
+      <!-- Pantalla 3: Éxito oficial de Mercado Pago -->
+      <div class="mp-body mp-status-screen" id="mp-screen-success" style="display: none;">
+        <div class="mp-status-icon mp-icon-success">✓</div>
+        <h2 style="color: #00a650; font-size: 1.35rem; margin-bottom: 6px;">¡Listo! Se acreditó tu pago</h2>
+        <p style="font-size: 0.85rem; color: #475569; margin-bottom: 14px;">
+          Le pagaste <strong id="mp-success-amount">$ 25.000,00</strong> a <strong>Sound Heritage</strong>.
+        </p>
+        <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; padding: 10px; font-size: 0.76rem; color: #64748b; margin-bottom: 18px;">
+          Operación de Mercado Pago <strong>#6842109432</strong>
+        </div>
+        <button type="button" class="mp-btn-pay" onclick="mpCompletarExito()">
+          Volver a Sound Heritage y ver entradas
+        </button>
+      </div>
+
+      <!-- Pantalla 4: Rechazo oficial de Mercado Pago -->
+      <div class="mp-body mp-status-screen" id="mp-screen-error" style="display: none;">
+        <div class="mp-status-icon mp-icon-error">✕</div>
+        <h2 style="color: #f23d4f; font-size: 1.35rem; margin-bottom: 6px;">No pudimos procesar tu pago</h2>
+        <p style="font-size: 0.85rem; color: #475569; margin-bottom: 16px;">
+          Tu tarjeta fue rechazada por la entidad bancaria debido a fondos insuficientes o límite disponible excedido.
+        </p>
+        <button type="button" class="mp-btn-pay" style="background: #333333;" onclick="mpReintentarPago()">
+          Intentar con otra tarjeta
+        </button>
+        <button type="button" style="width: 100%; background: none; border: none; color: #666; font-size: 0.82rem; padding: 10px; cursor: pointer;" onclick="cerrarMercadoPago()">
+          Cancelar y volver a la tienda
+        </button>
+      </div>
+
+      <div class="mp-footer-disclaimer">
+        Mercado Pago protege tus datos. Certificación PCI-DSS Nivel 1.
+      </div>
+
+    </div>
+  </div>
+
+
+  <!-- ================================================================
+       LÓGICA JAVASCRIPT: NAVEGACIÓN Y MERCADO PAGO CHECKOUT
+       ================================================================ -->
+  <script>
+    const actores = {
+      evento: { avatar: 'CG', nombre: 'Carlos Gómez', rol: 'Administrador', bg: '#2563eb' },
+      venta: { avatar: 'LG', nombre: 'Laura Gómez', rol: 'Vendedora (Mostrador)', bg: '#059669' },
+      cliente: { avatar: 'LG', nombre: 'Laura Gómez', rol: 'Vendedora (Padrón)', bg: '#059669' },
+      reserva: { avatar: 'LG', nombre: 'Laura Gómez', rol: 'Vendedora (Salón)', bg: '#059669' },
+      compra: { avatar: 'MR', nombre: 'Martín Rivas', rol: 'Cliente Registrado', bg: '#7c3aed' },
+      producto: { avatar: 'MR', nombre: 'Marcos Ruiz', rol: 'Encargado de Stock', bg: '#d97706' }
+    };
+
+    const catalogoVenta = [
+      { id: 'p1', nombre: 'Fender Stratocaster Sunburst', cat: 'Guitarra Eléctrica', precio: 850000, stock: 3 },
+      { id: 'p2', nombre: 'Encordado D\'Addario (.010 - .046)', cat: 'Cuerdas Guitarra', precio: 18500, stock: 25 },
+      { id: 'p3', nombre: 'Cable Plug Ernie Ball 6m', cat: 'Accesorios / Cable', precio: 32000, stock: 1 }
+    ];
+
+    let carritoVenta = [];
+    let cupoWebDisponible = 40;
+    let mpPagoRechazado = false;
+    const emailsPadron = ['juan.perez@email.com', 'carlos.admin@email.com'];
+    const skusExistentes = ['PROD-001', 'PROD-002', 'PROD-003'];
+
+    window.addEventListener('DOMContentLoaded', () => {
+      iniciarModulo('evento');
+      vtaRenderCatalogo();
+      compRecalcularTotal();
+    });
+
+    function iniciarModulo(modKey) {
+      const keys = ['evento', 'venta', 'cliente', 'reserva', 'compra', 'producto'];
+      keys.forEach(k => {
+        const el = document.getElementById(`modulo-${k}`);
+        const btn = document.getElementById(`btn-nav-${k}`);
+        if (el) el.style.display = (k === modKey) ? 'flex' : 'none';
+        if (btn) btn.classList.toggle('active', k === modKey);
+      });
+
+      const act = actores[modKey];
+      if (act) {
+        document.getElementById('user-avatar').textContent = act.avatar;
+        document.getElementById('user-avatar').style.background = act.bg;
+        document.getElementById('user-name').textContent = act.nombre;
+        document.getElementById('user-role').textContent = act.rol;
+      }
+    }
+
+    // ================================================================
+    // CU 1: EVENTOS MUSICALES
+    // ================================================================
+    function evVolverACartelera() {
+      document.getElementById('ev-vista-cartelera').style.display = 'block';
+      document.getElementById('ev-vista-formulario').style.display = 'none';
+      document.getElementById('ev-vista-exito').style.display = 'none';
+    }
+
+    function evAbrirFormulario() {
+      document.getElementById('ev-vista-cartelera').style.display = 'none';
+      document.getElementById('ev-vista-formulario').style.display = 'block';
+      document.getElementById('ev-vista-exito').style.display = 'none';
+      document.getElementById('form-evento').reset();
+      limpiarErroresEvento();
+    }
+
+    function evCargarDatosValidos() {
+      document.getElementById('ev_nombre').value = 'Festival Sound Heritage 2026 - Edición Aniversario';
+      document.getElementById('ev_tipo').value = 'Festival Musical';
+      document.getElementById('ev_precio').value = '12500';
+      document.getElementById('ev_fecha').value = '2026-11-28';
+      document.getElementById('ev_hora').value = '21:00';
+      document.getElementById('ev_cupo').value = '300';
+      limpiarErroresEvento();
+    }
+
+    function evCargarDatosConflicto() {
+      document.getElementById('ev_nombre').value = 'Festival Sound Heritage 2026 - Edición Aniversario';
+      document.getElementById('ev_tipo').value = 'Festival Musical';
+      document.getElementById('ev_precio').value = '12500';
+      document.getElementById('ev_fecha').value = '2026-10-22';
+      document.getElementById('ev_hora').value = '21:00';
+      document.getElementById('ev_cupo').value = '450';
+      limpiarErroresEvento();
+    }
+
+    function limpiarErroresEvento() {
+      document.getElementById('ev_fecha').classList.remove('input-has-error');
+      document.getElementById('ev_cupo').classList.remove('input-has-error');
+      document.getElementById('error-fecha').classList.remove('active');
+      document.getElementById('error-cupo').classList.remove('active');
+      document.getElementById('banner-error-evento').style.display = 'none';
+    }
+
+    function evGuardarEvento(e) {
+      e.preventDefault();
+      const fecha = document.getElementById('ev_fecha').value;
+      const cupo = parseInt(document.getElementById('ev_cupo').value) || 0;
+      let error = false;
+
+      if (fecha === '2026-10-22') {
+        document.getElementById('ev_fecha').classList.add('input-has-error');
+        document.getElementById('error-fecha').classList.add('active');
+        error = true;
+      }
+      if (cupo > 350) {
+        document.getElementById('ev_cupo').classList.add('input-has-error');
+        document.getElementById('error-cupo').classList.add('active');
+        error = true;
+      }
+
+      if (error) {
+        document.getElementById('banner-error-evento').style.display = 'flex';
+        return;
+      }
+
+      document.getElementById('resumen-ev-nombre').textContent = document.getElementById('ev_nombre').value;
+      document.getElementById('resumen-ev-fecha-hora').textContent = fecha + ' • ' + document.getElementById('ev_hora').value + ' hs';
+      document.getElementById('resumen-ev-precio').textContent = '$ ' + Number(document.getElementById('ev_precio').value).toLocaleString('es-AR', {minimumFractionDigits: 2}) + ' ARS';
+      document.getElementById('resumen-ev-cupo').textContent = cupo + ' / 350 personas';
+
+      document.getElementById('ev-vista-formulario').style.display = 'none';
+      document.getElementById('ev-vista-exito').style.display = 'block';
+    }
+
+    // ================================================================
+    // CU 6: PUNTO DE VENTA (POS)
+    // ================================================================
+    function vtaVolverAInicio() {
+      document.getElementById('vta-vista-inicio').style.display = 'block';
+      document.getElementById('vta-vista-facturacion').style.display = 'none';
+      document.getElementById('vta-vista-comprobante').style.display = 'none';
+    }
+
+    function vtaAbrirCaja() {
+      document.getElementById('vta-vista-inicio').style.display = 'none';
+      document.getElementById('vta-vista-facturacion').style.display = 'block';
+      document.getElementById('vta-vista-comprobante').style.display = 'none';
+      vtaVaciarOrden();
+    }
+
+    function vtaRenderCatalogo() {
+      const cont = document.getElementById('vta-catalogo-container');
+      if (!cont) return;
+      cont.innerHTML = '';
+      catalogoVenta.forEach(p => {
+        const div = document.createElement('div');
+        div.className = 'prod-card';
+        div.innerHTML = `
+          <div>
+            <strong>${p.nombre}</strong>
+            <div style="font-size: 0.78rem; color: var(--text-muted);">${p.cat}</div>
+            <div style="font-weight: 700; color: var(--primary); margin-top: 3px;">$ ${p.precio.toLocaleString('es-AR')},00</div>
+          </div>
+          <div style="text-align: right;">
+            <span class="badge ${p.stock <= 2 ? 'badge-danger' : 'badge-success'}">${p.stock} un. stock</span>
+            <div style="display: flex; align-items: center; gap: 6px; margin-top: 6px; justify-content: flex-end;">
+              <div class="qty-control">
+                <button type="button" class="qty-btn" onclick="vtaModificarQtyInput('${p.id}', -1)">-</button>
+                <input type="number" id="vta-qty-${p.id}" class="qty-input" value="1" min="1">
+                <button type="button" class="qty-btn" onclick="vtaModificarQtyInput('${p.id}', 1)">+</button>
+              </div>
+              <button type="button" class="btn btn-primary btn-sm" onclick="vtaAgregarItem('${p.id}')">➕ Agregar</button>
+            </div>
+          </div>
+        `;
+        cont.appendChild(div);
+      });
+    }
+
+    function vtaModificarQtyInput(id, delta) {
+      const inp = document.getElementById(`vta-qty-${id}`);
+      let v = (parseInt(inp.value) || 1) + delta;
+      if (v < 1) v = 1;
+      inp.value = v;
+    }
+
+    function vtaAgregarItem(id) {
+      const prod = catalogoVenta.find(p => p.id === id);
+      const inp = document.getElementById(`vta-qty-${id}`);
+      const cantPedida = parseInt(inp.value) || 1;
+      const itemExistente = carritoVenta.find(i => i.id === id);
+      const totalPedida = (itemExistente ? itemExistente.cantidad : 0) + cantPedida;
+
+      if (totalPedida > prod.stock) {
+        document.getElementById('vta-banner-error-stock').style.display = 'flex';
+        document.getElementById('vta-banner-error-stock').innerHTML = 
+          `<div><strong>Stock insuficiente:</strong> Solo quedan ${prod.stock} unidad(es) de "${prod.nombre}". No es posible agregar ${totalPedida} unidades.</div>`;
+        return;
+      }
+
+      document.getElementById('vta-banner-error-stock').style.display = 'none';
+      if (itemExistente) itemExistente.cantidad += cantPedida;
+      else carritoVenta.push({ id, cantidad: cantPedida });
+      inp.value = 1;
+      vtaRenderGrilla();
+    }
+
+    function vtaRenderGrilla() {
+      const tbody = document.getElementById('vta-grilla-body');
+      tbody.innerHTML = '';
+
+      if (carritoVenta.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="4" style="text-align: center; color: var(--text-muted); padding: 20px; font-style: italic;">Sin productos en la orden. Seleccione artículos del catálogo.</td></tr>`;
+        document.getElementById('vta-total-calculado').textContent = '$ 0,00 ARS';
+        document.getElementById('vta-contador-items').textContent = '0 ítems';
+        document.getElementById('vta-btn-confirmar').classList.add('btn-disabled');
+        return;
+      }
+
+      document.getElementById('vta-btn-confirmar').classList.remove('btn-disabled');
+      let total = 0;
+      let totalItems = 0;
+
+      carritoVenta.forEach((item, idx) => {
+        const prod = catalogoVenta.find(p => p.id === item.id);
+        const sub = prod.precio * item.cantidad;
+        total += sub;
+        totalItems += item.cantidad;
+
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td><strong>${prod.nombre}</strong></td>
+          <td style="text-align: center;">${item.cantidad}</td>
+          <td style="text-align: right; font-weight: 700;">$ ${sub.toLocaleString('es-AR')},00</td>
+          <td style="text-align: center;"><button type="button" class="btn-trash" onclick="vtaQuitarItem(${idx})">🗑️</button></td>
+        `;
+        tbody.appendChild(tr);
+      });
+
+      document.getElementById('vta-total-calculado').textContent = '$ ' + total.toLocaleString('es-AR') + ',00 ARS';
+      document.getElementById('vta-contador-items').textContent = `${totalItems} ítem(s) en orden`;
+    }
+
+    function vtaQuitarItem(idx) {
+      carritoVenta.splice(idx, 1);
+      vtaRenderGrilla();
+    }
+
+    function vtaVaciarOrden() {
+      carritoVenta = [];
+      document.getElementById('vta-banner-error-stock').style.display = 'none';
+      vtaRenderGrilla();
+    }
+
+    function vtaEmitirTicket() {
+      if (carritoVenta.length === 0) return;
+      const metodo = document.querySelector('input[name="vta_pago"]:checked').value;
+      document.getElementById('vta-ticket-metodo').textContent = 'Pago: ' + metodo;
+      const ahora = new Date();
+      document.getElementById('vta-ticket-fecha').textContent = 'Fecha: ' + ahora.toLocaleDateString('es-AR') + ' ' + ahora.toLocaleTimeString('es-AR', {hour:'2-digit', minute:'2-digit'}) + ' hs';
+
+      const tktBody = document.getElementById('vta-ticket-items');
+      const auditBody = document.getElementById('vta-auditoria-stock');
+      tktBody.innerHTML = '';
+      auditBody.innerHTML = '';
+      let total = 0;
+
+      carritoVenta.forEach(item => {
+        const prod = catalogoVenta.find(p => p.id === item.id);
+        const sub = prod.precio * item.cantidad;
+        total += sub;
+
+        const tr = document.createElement('tr');
+        tr.innerHTML = `<td>${item.cantidad}</td><td>${prod.nombre}</td><td style="text-align: right;">$ ${sub.toLocaleString('es-AR')},00</td>`;
+        tktBody.appendChild(tr);
+
+        const nuevoStock = prod.stock - item.cantidad;
+        const trA = document.createElement('tr');
+        trA.innerHTML = `<td><strong>${prod.nombre}</strong></td><td style="text-align: center;">${prod.stock} un.</td><td style="text-align: center; color: var(--danger); font-weight: 700;">-${item.cantidad} un.</td><td style="text-align: center; color: var(--success); font-weight: 700;">${nuevoStock} un.</td>`;
+        auditBody.appendChild(trA);
+      });
+
+      document.getElementById('vta-ticket-total').textContent = 'TOTAL: $ ' + total.toLocaleString('es-AR') + ',00 ARS';
+      document.getElementById('vta-vista-facturacion').style.display = 'none';
+      document.getElementById('vta-vista-comprobante').style.display = 'block';
+    }
+
+    // ================================================================
+    // CU 7: REGISTRAR CLIENTE
+    // ================================================================
+    function cliVolverADirectorio() {
+      document.getElementById('cli-vista-directorio').style.display = 'block';
+      document.getElementById('cli-vista-formulario').style.display = 'none';
+      document.getElementById('cli-vista-exito').style.display = 'none';
+    }
+
+    function cliAbrirFormulario() {
+      document.getElementById('cli-vista-directorio').style.display = 'none';
+      document.getElementById('cli-vista-formulario').style.display = 'block';
+      document.getElementById('cli-vista-exito').style.display = 'none';
+      document.getElementById('cli_input_nombre').value = '';
+      document.getElementById('cli_input_dni').value = '';
+      document.getElementById('cli_input_telefono').value = '';
+      document.getElementById('cli_input_email').value = '';
+      cliLimpiarErrores();
+    }
+
+    function cliCargarNuevo() {
+      document.getElementById('cli_input_nombre').value = 'Mariana Rodríguez';
+      document.getElementById('cli_input_dni').value = '38.921.450';
+      document.getElementById('cli_input_telefono').value = '11-4589-2231';
+      document.getElementById('cli_input_email').value = 'mariana.rodriguez@email.com';
+      cliLimpiarErrores();
+    }
+
+    function cliCargarDuplicado() {
+      document.getElementById('cli_input_nombre').value = 'Juan Pérez Segundo';
+      document.getElementById('cli_input_dni').value = '39.000.111';
+      document.getElementById('cli_input_telefono').value = '11-2233-4455';
+      document.getElementById('cli_input_email').value = 'juan.perez@email.com';
+      cliLimpiarErrores();
+    }
+
+    function cliLimpiarErrores() {
+      document.getElementById('cli_input_email').classList.remove('input-has-error');
+      document.getElementById('cli-error-email').classList.remove('active');
+      document.getElementById('cli-banner-error').style.display = 'none';
+    }
+
+    function cliGuardarCliente(e) {
+      e.preventDefault();
+      const email = document.getElementById('cli_input_email').value.trim().toLowerCase();
+
+      if (emailsPadron.includes(email)) {
+        document.getElementById('cli_input_email').classList.add('input-has-error');
+        document.getElementById('cli-error-email').classList.add('active');
+        document.getElementById('cli-banner-error').style.display = 'flex';
+        return;
+      }
+
+      emailsPadron.push(email);
+      const nombre = document.getElementById('cli_input_nombre').value;
+      const dni = document.getElementById('cli_input_dni').value;
+      const idUnico = 'CLI-2026-0842';
+
+      document.getElementById('cli-resumen-nombre').textContent = nombre;
+      document.getElementById('cli-resumen-dni').textContent = dni;
+      document.getElementById('cli-resumen-email').textContent = email;
+      document.getElementById('cli-resumen-id').textContent = idUnico;
+
+      const tbody = document.getElementById('cli-tabla-padron-body');
+      const tr = document.createElement('tr');
+      tr.innerHTML = `<td>${idUnico}</td><td>${nombre}</td><td>${dni}</td><td>${email}</td><td>${document.getElementById('cli_input_telefono').value}</td>`;
+      tbody.appendChild(tr);
+
+      document.getElementById('cli-vista-formulario').style.display = 'none';
+      document.getElementById('cli-vista-exito').style.display = 'block';
+    }
+
+    // ================================================================
+    // CU 8: RESERVA DE SALÓN
+    // ================================================================
+    function resVolverAAgenda() {
+      document.getElementById('res-vista-agenda').style.display = 'block';
+      document.getElementById('res-vista-formulario').style.display = 'none';
+      document.getElementById('res-vista-exito').style.display = 'none';
+    }
+
+    function resAbrirFormulario() {
+      document.getElementById('res-vista-agenda').style.display = 'none';
+      document.getElementById('res-vista-formulario').style.display = 'block';
+      document.getElementById('res-vista-exito').style.display = 'none';
+      resLimpiarErrores();
+    }
+
+    function resCargarDisponible() {
+      document.getElementById('res_input_fecha').value = '2026-11-15';
+      document.getElementById('res_hora_desde').value = '18:00';
+      document.getElementById('res_hora_hasta').value = '22:00';
+      document.getElementById('res_input_cliente').value = 'Mariana Rodríguez (CLI-2026-0842)';
+      document.getElementById('res_input_tematica').value = 'Ensayo General de Banda con Sonido';
+      resLimpiarErrores();
+    }
+
+    function resCargarOcupada() {
+      document.getElementById('res_input_fecha').value = '2026-10-22';
+      document.getElementById('res_hora_desde').value = '19:00';
+      document.getElementById('res_hora_hasta').value = '23:00';
+      document.getElementById('res_input_cliente').value = 'Grupo Los Acústicos';
+      document.getElementById('res_input_tematica').value = 'Grabación Acústica de Estudio';
+      resLimpiarErrores();
+    }
+
+    function resLimpiarErrores() {
+      document.getElementById('res_input_fecha').classList.remove('input-has-error');
+      document.getElementById('res-error-fecha').classList.remove('active');
+      document.getElementById('res-banner-error').style.display = 'none';
+    }
+
+    function resGuardarReserva(e) {
+      e.preventDefault();
+      const fecha = document.getElementById('res_input_fecha').value;
+
+      if (fecha === '2026-10-22') {
+        document.getElementById('res_input_fecha').classList.add('input-has-error');
+        document.getElementById('res-error-fecha').classList.add('active');
+        document.getElementById('res-banner-error').style.display = 'flex';
+        return;
+      }
+
+      document.getElementById('res-resumen-tematica').textContent = document.getElementById('res_input_tematica').value;
+      document.getElementById('res-resumen-cliente').textContent = document.getElementById('res_input_cliente').value;
+      document.getElementById('res-resumen-horario').textContent = fecha + ' • ' + document.getElementById('res_hora_desde').value + ' a ' + document.getElementById('res_hora_hasta').value + ' hs';
+
+      document.getElementById('res-vista-formulario').style.display = 'none';
+      document.getElementById('res-vista-exito').style.display = 'block';
+    }
+
+    // ================================================================
+    // CU 13: COMPRA DE ENTRADAS CON MERCADO PAGO CHECKOUT REAL
+    // ================================================================
+    function compVolverACartelera() {
+      document.getElementById('comp-vista-cartelera').style.display = 'block';
+      document.getElementById('comp-vista-ficha-y-pago').style.display = 'none';
+      document.getElementById('comp-vista-exito').style.display = 'none';
+    }
+
+    function compAbrirFicha() {
+      document.getElementById('comp-vista-cartelera').style.display = 'none';
+      document.getElementById('comp-vista-ficha-y-pago').style.display = 'block';
+      document.getElementById('comp-vista-exito').style.display = 'none';
+      compRecalcularTotal();
+    }
+
+    function compModificarQty(delta) {
+      const inp = document.getElementById('comp-input-qty');
+      let v = (parseInt(inp.value) || 1) + delta;
+      if (v < 1) v = 1;
+      inp.value = v;
+      compRecalcularTotal();
+    }
+
+    function compProbarQty(q) {
+      document.getElementById('comp-input-qty').value = q;
+      compRecalcularTotal();
+    }
+
+    function compRecalcularTotal() {
+      const q = parseInt(document.getElementById('comp-input-qty').value) || 1;
+      const total = q * 12500;
+      const totalStr = '$ ' + total.toLocaleString('es-AR') + ',00 ARS';
+      document.getElementById('comp-txt-total').textContent = totalStr;
+      document.getElementById('mp-txt-total').textContent = '$ ' + total.toLocaleString('es-AR') + ',00';
+      document.getElementById('mp-success-amount').textContent = '$ ' + total.toLocaleString('es-AR') + ',00';
+      
+      // Actualizar opciones de cuotas en Mercado Pago
+      const selCuotas = document.getElementById('mp-select-cuotas');
+      selCuotas.innerHTML = `
+        <option selected>1 cuota de $ ${total.toLocaleString('es-AR')},00 (Sin interés)</option>
+        <option>3 cuotas de $ ${Math.round(total/3).toLocaleString('es-AR')},00 (Sin interés)</option>
+        <option>6 cuotas fijas de $ ${Math.round((total*1.18)/6).toLocaleString('es-AR')},00</option>
+      `;
+
+      document.getElementById('comp-banner-error-cupo').style.display = 'none';
+      document.getElementById('comp-banner-error-pago').style.display = 'none';
+    }
+
+    // Modal Mercado Pago
+    function abrirMercadoPago() {
+      const q = parseInt(document.getElementById('comp-input-qty').value) || 1;
+      if (q > cupoWebDisponible) {
+        document.getElementById('comp-banner-error-cupo').style.display = 'flex';
+        return;
+      }
+      document.getElementById('comp-banner-error-cupo').style.display = 'none';
+      document.getElementById('comp-banner-error-pago').style.display = 'none';
+
+      // Mostrar pantalla de formulario
+      document.getElementById('mp-screen-form').style.display = 'block';
+      document.getElementById('mp-screen-loading').style.display = 'none';
+      document.getElementById('mp-screen-success').style.display = 'none';
+      document.getElementById('mp-screen-error').style.display = 'none';
+      document.getElementById('mp-modal-overlay').style.display = 'flex';
+    }
+
+    function cerrarMercadoPago() {
+      document.getElementById('mp-modal-overlay').style.display = 'none';
+    }
+
+    function mpActualizarNumero(num) {
+      const limpio = num.replace(/\s+/g, '');
+      let formateado = limpio.replace(/(\d{4})/g, '$1 ').trim();
+      document.getElementById('mp-card-number-preview').textContent = formateado || '•••• •••• •••• 1234';
+      
+      // Detección de marca
+      const logo = document.getElementById('mp-card-logo');
+      if (limpio.startsWith('4')) logo.textContent = 'VISA';
+      else if (limpio.startsWith('5')) logo.textContent = 'MASTERCARD';
+      else if (limpio.startsWith('3')) logo.textContent = 'AMEX';
+      else logo.textContent = 'CABAL';
+    }
+
+    function mpSetearSimulacion(aprobado) {
+      mpPagoRechazado = !aprobado;
+      if (aprobado) {
+        document.getElementById('mp_card_num').value = '4500 8921 4450 1234';
+      } else {
+        document.getElementById('mp_card_num').value = '4500 0000 0000 0000';
+      }
+      mpActualizarNumero(document.getElementById('mp_card_num').value);
+    }
+
+    function mpEjecutarPago(e) {
+      e.preventDefault();
+      document.getElementById('mp-screen-form').style.display = 'none';
+      document.getElementById('mp-screen-loading').style.display = 'block';
+
+      setTimeout(() => {
+        document.getElementById('mp-screen-loading').style.display = 'none';
+
+        if (mpPagoRechazado) {
+          document.getElementById('mp-screen-error').style.display = 'block';
+        } else {
+          document.getElementById('mp-screen-success').style.display = 'block';
+        }
+      }, 900);
+    }
+
+    function mpReintentarPago() {
+      document.getElementById('mp-screen-error').style.display = 'none';
+      document.getElementById('mp-screen-form').style.display = 'block';
+      mpSetearSimulacion(true); // Restaurar a aprobado para permitir reintento
+    }
+
+    function mpCompletarExito() {
+      cerrarMercadoPago();
+      const q = parseInt(document.getElementById('comp-input-qty').value) || 1;
+      cupoWebDisponible -= q;
+      document.getElementById('comp-txt-cupo-cartelera').textContent = `${cupoWebDisponible} entradas restantes`;
+      document.getElementById('comp-txt-cupo-ficha').textContent = `${cupoWebDisponible} entradas restantes`;
+      document.getElementById('comp-resumen-cant').textContent = q;
+      document.getElementById('comp-resumen-total').textContent = '$ ' + (q * 12500).toLocaleString('es-AR') + ',00 ARS';
+      document.getElementById('comp-resumen-cupo-reducido').textContent = `${cupoWebDisponible} entradas restantes`;
+
+      document.getElementById('comp-vista-ficha-y-pago').style.display = 'none';
+      document.getElementById('comp-vista-exito').style.display = 'block';
+    }
+
+    // ================================================================
+    // CU 15: REGISTRAR PRODUCTO (STOCK)
+    // ================================================================
+    function prodVolverATabla() {
+      document.getElementById('prod-vista-tabla').style.display = 'block';
+      document.getElementById('prod-vista-formulario').style.display = 'none';
+      document.getElementById('prod-vista-exito').style.display = 'none';
+    }
+
+    function prodAbrirFormulario() {
+      document.getElementById('prod-vista-tabla').style.display = 'none';
+      document.getElementById('prod-vista-formulario').style.display = 'block';
+      document.getElementById('prod-vista-exito').style.display = 'none';
+      document.getElementById('prod_input_sku').value = '';
+      document.getElementById('prod_input_nombre').value = '';
+      document.getElementById('prod_input_cat').value = '';
+      document.getElementById('prod_input_precio').value = '';
+      document.getElementById('prod_input_stock').value = '';
+      prodLimpiarErrores();
+    }
+
+    function prodCargarNuevo() {
+      document.getElementById('prod_input_sku').value = 'PROD-006';
+      document.getElementById('prod_input_nombre').value = 'Bajo Eléctrico Fender Precision Bass Player';
+      document.getElementById('prod_input_cat').value = 'Instrumentos Musicales';
+      document.getElementById('prod_input_precio').value = '920000';
+      document.getElementById('prod_input_stock').value = '4';
+      prodLimpiarErrores();
+    }
+
+    function prodCargarDuplicado() {
+      document.getElementById('prod_input_sku').value = 'PROD-001';
+      document.getElementById('prod_input_nombre').value = 'Fender Stratocaster Sunburst Clon';
+      document.getElementById('prod_input_cat').value = 'Instrumentos Musicales';
+      document.getElementById('prod_input_precio').value = '850000';
+      document.getElementById('prod_input_stock').value = '2';
+      prodLimpiarErrores();
+    }
+
+    function prodLimpiarErrores() {
+      document.getElementById('prod_input_sku').classList.remove('input-has-error');
+      document.getElementById('prod-error-sku').classList.remove('active');
+      document.getElementById('prod-banner-error').style.display = 'none';
+    }
+
+    function prodGuardarProducto(e) {
+      e.preventDefault();
+      const sku = document.getElementById('prod_input_sku').value.trim().toUpperCase();
+
+      if (skusExistentes.includes(sku)) {
+        document.getElementById('prod_input_sku').classList.add('input-has-error');
+        document.getElementById('prod-error-sku').classList.add('active');
+        document.getElementById('prod-banner-error').style.display = 'flex';
+        return;
+      }
+
+      skusExistentes.push(sku);
+      const nombre = document.getElementById('prod_input_nombre').value;
+      const cat = document.getElementById('prod_input_cat').value;
+      const precio = parseFloat(document.getElementById('prod_input_precio').value) || 0;
+      const stock = parseInt(document.getElementById('prod_input_stock').value) || 1;
+
+      const tbody = document.getElementById('prod-tabla-existencias-body');
+      const tr = document.createElement('tr');
+      tr.innerHTML = `<td>${sku}</td><td>${nombre}</td><td>${cat}</td><td>$ ${precio.toLocaleString('es-AR')},00</td><td>${stock} unidades</td>`;
+      tbody.appendChild(tr);
+
+      catalogoVenta.push({ id: sku.toLowerCase(), nombre, cat, precio, stock });
+      vtaRenderCatalogo();
+
+      document.getElementById('prod-resumen-sku').textContent = sku;
+      document.getElementById('prod-resumen-nombre').textContent = nombre;
+      document.getElementById('prod-resumen-cat').textContent = cat;
+      document.getElementById('prod-resumen-precio').textContent = '$ ' + precio.toLocaleString('es-AR') + ',00 ARS';
+      document.getElementById('prod-resumen-stock').textContent = stock + ' unidades';
+
+      document.getElementById('prod-vista-formulario').style.display = 'none';
+      document.getElementById('prod-vista-exito').style.display = 'block';
+    }
+  </script>
+
+</body>
+</html>
