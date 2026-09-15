@@ -52,7 +52,8 @@ class SupplierController extends Controller
      */
     public function edit(Supplier $supplier)
     {
-        //
+        // Retornamos la vista de edición y le pasamos el proveedor encontrado
+        return view('suppliers.edit', compact('supplier'));
     }
 
     /**
@@ -60,7 +61,15 @@ class SupplierController extends Controller
      */
     public function update(UpdateSupplierRequest $request, Supplier $supplier)
     {
-        //
+        // Actualizamos todos los campos correspondientes
+        $supplier->name = $request->input('name');
+        $supplier->address = $request->input('address');
+        $supplier->phone = $request->input('phone');
+
+        $supplier->save();
+
+        return redirect()->route('supplier.index')
+            ->with('success', __('Proveedor actualizado exitosamente.'));
     }
 
     /**

@@ -14,6 +14,13 @@ export default {
             fontFamily: {
                 sans: ['Figtree', ...defaultTheme.fontFamily.sans],
             },
+            // AGREGAR ESTE BLOQUE DE COLORES
+            colors: {
+                sound: {
+                    blue: '#0b1031',
+                    gold: '#b48d56',
+                }
+            }
         },
     },
 
