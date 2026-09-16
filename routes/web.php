@@ -29,16 +29,16 @@ Route::middleware('auth')->group(function () {
 // MÓDULO DE USUARIOS Y ROLES (Protegido por Spatie)
 // -----------------------------------------------------------------------------
 
-/* * NIVEL 1: Lectura. 
- * Separamos el "index" para que en el futuro más roles (ej: Supervisor, Director) 
+/* * NIVEL 1: Lectura.
+ * Separamos el "index" para que en el futuro más roles (ej: Supervisor, Director)
  * puedan entrar a ver la tabla. Aquí es donde brilla el @can en la vista.
  */
 Route::middleware(['auth', 'role:Administrador|Supervisor'])->group(function () {
-    Route::get('/usuarios', [UserController::class, 'index'])->name('users.index'); 
+    Route::get('/usuarios', [UserController::class, 'index'])->name('users.index');
 });
 
-/* * NIVEL 2: Escritura/Edición. 
- * Estas rutas son críticas. Las dejamos en un grupo exclusivo donde SOLO 
+/* * NIVEL 2: Escritura/Edición.
+ * Estas rutas son críticas. Las dejamos en un grupo exclusivo donde SOLO
  * el Administrador puede entrar a ver el formulario y guardar cambios.
  */
 Route::middleware(['auth', 'role:Administrador'])->group(function () {
