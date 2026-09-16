@@ -242,4 +242,13 @@
         background-color: #9a7645 !important;
         box-shadow: 0 3px 6px rgba(180, 141, 86, 0.4) !important;
     }
+
+    /* 11. Logo Corporativo */
+    .fi-logo,
+    .fi-logo img,
+    img.fi-logo {
+        max-height: 3.5rem !important;
+        width: auto !important;
+        object-fit: contain !important;
+    }
 </style>

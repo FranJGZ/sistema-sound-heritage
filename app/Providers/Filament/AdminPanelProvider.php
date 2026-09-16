@@ -30,8 +30,8 @@ class AdminPanelProvider extends PanelProvider
             ->login()
             ->darkMode(false)
             ->brandName('Sound Heritage')
-            ->brandLogo(asset('img/Logo_SH.svg'))
-            ->brandLogoHeight('2.5rem')
+            ->brandLogo(asset('img/Logo_SH.png'))
+            ->brandLogoHeight('3.2rem')
             ->font('Figtree')
             ->colors([
                 'primary'   => Color::hex('#b48d56'), // Dorado corporativo
