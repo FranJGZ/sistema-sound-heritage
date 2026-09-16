@@ -27,10 +27,9 @@ class ListSuppliers extends ListRecords
                 ->modifyQueryUsing(fn (Builder $query) => $query->whereNull('deleted_at')),
 
             'bajas' => Tab::make('Dados de Baja')
-                ->modifyQueryUsing(fn (Builder $query) => $query->withTrashed()->whereNotNull('deleted_at')),
+                ->modifyQueryUsing(fn (Builder $query) => $query->whereNotNull('deleted_at')),
 
             'todos' => Tab::make('Todos')
-                ->modifyQueryUsing(fn (Builder $query) => $query->withTrashed()),
         ];
     }
 }

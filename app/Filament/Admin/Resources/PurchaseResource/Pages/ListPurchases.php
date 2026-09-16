@@ -27,10 +27,10 @@ class ListPurchases extends ListRecords
                 ->modifyQueryUsing(fn (Builder $query) => $query->whereNull('deleted_at')),
                 
             'anuladas' => Tab::make('Compras Anuladas')
-                ->modifyQueryUsing(fn (Builder $query) => $query->withTrashed()->whereNotNull('deleted_at')),
+                ->modifyQueryUsing(fn (Builder $query) => $query->whereNotNull('deleted_at')),
                 
             'todas' => Tab::make('Todas')
-                ->modifyQueryUsing(fn (Builder $query) => $query->withTrashed()),
+                ->modifyQueryUsing(fn (Builder $query) => $query),
         ];
     }
 }

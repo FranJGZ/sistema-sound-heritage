@@ -8,7 +8,7 @@ use Illuminate\Support\Facades\Route;
 // RUTAS PÚBLICAS
 // -----------------------------------------------------------------------------
 Route::get('/', function () {
-    return view('welcome');
+    return redirect('/admin');
 });
 
 // -----------------------------------------------------------------------------

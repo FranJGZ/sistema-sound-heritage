@@ -182,6 +182,11 @@ class PurchaseResource extends Resource
                     ->searchable()
                     ->sortable(),
 
+                Tables\Columns\TextColumn::make('purchaseDetails.product.name')
+                    ->label('Productos')
+                    ->badge()
+                    ->separator(', '),
+
                 Tables\Columns\TextColumn::make('purchase_date')
                     ->label('Fecha de Compra')
                     ->date('d/m/Y')
@@ -191,7 +196,7 @@ class PurchaseResource extends Resource
                     ->label('Total ($)')
                     ->money('ARS')
                     ->sortable(),
-
+        
                 Tables\Columns\IconColumn::make('deleted_at')
                     ->label('Estado')
                     ->options([

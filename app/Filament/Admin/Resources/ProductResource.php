@@ -23,14 +23,14 @@ class ProductResource extends Resource
     public static function getProductTypeOptions(): array
     {
         return [
-            'cuerda'               => '🎸 1. Instrumentos de Cuerda (Cordófonos)',
-            'teclado'              => '🎹 2. Teclados y Sintetizadores',
-            'percusion'            => '🥁 3. Percusión (Membranófonos e Idiófonos)',
-            'viento'               => '🎺 4. Instrumentos de Viento (Aerófonos)',
-            'amplificacion'        => '🔊 5. Equipos de Amplificación y Altavoces',
-            'procesador_interfase' => '🎛️ 6. Procesadores de Señal, Mezcladoras e Interfaces',
-            'microfono'            => '🎙️ 7. Micrófonos',
-            'accesorio'            => '🔌 8. Accesorios Generales',
+            'cuerda'               => 'Instrumentos de Cuerda (Cordófonos)',
+            'teclado'              => 'Teclados y Sintetizadores',
+            'percusion'            => 'Percusión (Membranófonos e Idiófonos)',
+            'viento'               => 'Instrumentos de Viento (Aerófonos)',
+            'amplificacion'        => 'Equipos de Amplificación y Altavoces',
+            'procesador_interfase' => 'Procesadores de Señal, Mezcladoras e Interfaces',
+            'microfono'            => 'Micrófonos',
+            'accesorio'            => 'Accesorios Generales',
         ];
     }
 
