@@ -14,15 +14,16 @@ class RoleSeeder extends Seeder
      */
     public function run(): void
     {
+       app()[\Spatie\Permission\PermissionRegistrar::class]->forgetCachedPermissions();
+        $permisoEditarRoles = Permission::firstOrCreate(['name' => 'editar_roles', 'guard_name' => 'web']);
 
-        $permisoEditarRoles = Permission::create(['name' => 'editar_roles']);
-
-
+        
         // Creamos los roles base del sistema
-        $rol_admin=Role::create(['name' => 'Administrador']);
-        $rol_empleado=Role::create(['name' => 'Empleado']);
-        $rol_cliente=Role::create(['name' => 'Cliente']);
-        $rol_supervisor=Role::create(['name' => 'Supervisor']);
+        
+        $rol_admin = Role::firstOrCreate(['name' => 'Administrador']);
+        $rol_cliente = Role::firstOrCreate(['name' => 'Cliente']);
+        $rol_vendedor = Role::firstOrCreate(['name' => 'Vendedor']);
+        $rol_stock = Role::firstOrCreate(['name' => 'Encargado de Stock']);
 
 
         // Asignamos permisos a los roles

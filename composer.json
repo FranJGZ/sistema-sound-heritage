@@ -12,6 +12,7 @@
         "laravel/sanctum": "^4.0",
         "laravel/tinker": "^2.10.1",
         "owen-it/laravel-auditing": "^14.0",
+        "robsontenorio/mary": "^2.9",
         "spatie/laravel-permission": "^7.4"
     },
     "require-dev": {

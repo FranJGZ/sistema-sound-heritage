@@ -1,5 +1,6 @@
 <?php
 
+use App\Livewire\HomeTienda; 
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\UserController;
 use Illuminate\Support\Facades\Route;
@@ -7,9 +8,7 @@ use Illuminate\Support\Facades\Route;
 // -----------------------------------------------------------------------------
 // RUTAS PÚBLICAS
 // -----------------------------------------------------------------------------
-Route::get('/', function () {
-    return redirect('/admin');
-});
+Route::get('/', HomeTienda::class);
 
 // -----------------------------------------------------------------------------
 // RUTAS BÁSICAS DE AUTENTICACIÓN (Cualquiera que inicie sesión)
@@ -50,6 +49,7 @@ Route::middleware(['auth', 'role:Administrador'])->group(function () {
 Route::get('/tutorial', function () {
     return view('tutorial.index');
 })->middleware(['auth'])->name('tutorial');
+
 
 // -----------------------------------------------------------------------------
 
