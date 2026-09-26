@@ -12,11 +12,13 @@ use Filament\Tables;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\SoftDeletingScope;
+use Filament\Tables\Enums\FiltersLayout;
 
 class PurchaseResource extends Resource
 {
     protected static ?string $model = Purchase::class;
-
+    protected static ?string $navigationGroup = 'Tienda';
+    protected static ?int $navigationSort = 4;
     protected static ?string $navigationIcon = 'heroicon-o-shopping-cart';
     protected static ?string $navigationLabel = 'Compras';
     protected static ?string $modelLabel = 'Compra';
@@ -215,26 +217,113 @@ class PurchaseResource extends Resource
                     ->toggleable(isToggledHiddenByDefault: true),
             ])
             ->filters([
-                // Los estados (activas, anuladas, todas) se manejan desde las pestañas superiores
+                // 1. Estado Contable
+                Tables\Filters\TrashedFilter::make()
+                    ->label('Estado de la Compra')
+                    ->placeholder('Solo Compras Activas')
+                    ->trueLabel('Todas (Activas + Anuladas)')
+                    ->falseLabel('Solo Compras Anuladas'),
+
+                // 2. Por Proveedor
+                Tables\Filters\SelectFilter::make('supplier_id')
+                    ->label('Proveedor')
+                    ->relationship('supplier', 'name')
+                    ->searchable()
+                    ->preload(),
+
+                // 3. Por Producto específico incluido en la compra
+                Tables\Filters\SelectFilter::make('producto_comprado')
+                    ->label('Contiene el Producto')
+                    ->options(fn (): array => \App\Models\Product::query()->pluck('name', 'id')->toArray())
+                    ->searchable()
+                    ->query(function (Builder $query, array $data): Builder {
+                        return $query->when(
+                            filled($data['value'] ?? null),
+                            fn (Builder $q) => $q->whereHas('purchaseDetails', fn (Builder $sq) => $sq->where('product_id', $data['value']))
+                        );
+                    }),
+
+                // 4. Por Categoría de Mercadería
+                Tables\Filters\SelectFilter::make('categoria_producto')
+                    ->label('Categoría de Mercadería')
+                    ->options(ProductResource::getProductTypeOptions())
+                    ->query(function (Builder $query, array $data): Builder {
+                        return $query->when(
+                            filled($data['value'] ?? null),
+                            fn (Builder $q) => $q->whereHas('purchaseDetails.product', fn (Builder $sq) => $sq->where('type', $data['value']))
+                        );
+                    }),
+
+                // 5. Rango de Fechas de Compra
+                Tables\Filters\Filter::make('purchase_date')
+                    ->form([
+                        Forms\Components\DatePicker::make('desde')->label('Fecha Desde'),
+                        Forms\Components\DatePicker::make('hasta')->label('Fecha Hasta'),
+                    ])
+                    ->columns(2)
+                    ->query(function (Builder $query, array $data): Builder {
+                        return $query
+                            ->when(filled($data['desde'] ?? null), fn (Builder $q) => $q->whereDate('purchase_date', '>=', $data['desde']))
+                            ->when(filled($data['hasta'] ?? null), fn (Builder $q) => $q->whereDate('purchase_date', '<=', $data['hasta']));
+                    }),
+
+                // 6. Rango de Monto Total ($)
+                Tables\Filters\Filter::make('rango_total')
+                    ->form([
+                        Forms\Components\TextInput::make('total_min')->label('Monto Mínimo ($)')->numeric()->prefix('$'),
+                        Forms\Components\TextInput::make('total_max')->label('Monto Máximo ($)')->numeric()->prefix('$'),
+                    ])
+                    ->columns(2)
+                    ->query(function (Builder $query, array $data): Builder {
+                        return $query
+                            ->when(filled($data['total_min'] ?? null), fn (Builder $q) => $q->where('total', '>=', $data['total_min']))
+                            ->when(filled($data['total_max'] ?? null), fn (Builder $q) => $q->where('total', '<=', $data['total_max']));
+                    }),
+                       ])
+            ->filtersFormColumns(3)
+            ->filtersFormWidth(\Filament\Support\Enums\MaxWidth::FourExtraLarge)
+            ->headerActions([
+                Tables\Actions\Action::make('exportar_pdf')
+                    ->label('Exportar PDF')
+                    ->icon('heroicon-m-document-arrow-down')
+                    ->color('primary')
+                    ->action(function ($livewire) {
+                        $records = $livewire->getFilteredSortedTableQuery()->get();
+
+                        $pdf = \Barryvdh\DomPDF\Facade\Pdf::loadView('reports.pdf-generic', [
+                            'title'   => 'Reporte de Compras a Proveedores',
+                            'summary' => [
+                                'Compras Listadas' => $records->count(),
+                                'Compras Activas'  => $records->whereNull('deleted_at')->count(),
+                                'Compras Anuladas' => $records->whereNotNull('deleted_at')->count(),
+                                'Inversión Total'  => '$' . number_format((float) $records->whereNull('deleted_at')->sum('total'), 2, ',', '.'),
+                            ],
+                            'headers' => ['ID', 'Fecha', 'Proveedor', 'Productos Incluidos', 'Total ($)', 'Estado'],
+                            'rows'    => $records->map(fn ($r) => [
+                                '#' . str_pad($r->id, 4, '0', STR_PAD_LEFT),
+                                \Carbon\Carbon::parse($r->purchase_date)->format('d/m/Y'),
+                                $r->supplier?->name ?? '-',
+                                $r->purchaseDetails->map(fn ($d) => ($d->product?->name ?? '') . ' (x' . $d->quantity . ')')->implode(', '),
+                                '$' . number_format((float) $r->total, 2, ',', '.'),
+                                $r->trashed() ? 'Anulada' : 'Activa',
+                            ])->toArray(),
+                        ])->setPaper('a4', 'landscape');
+
+                        return response()->streamDownload(
+                            fn () => print($pdf->output()),
+                            'reporte-compras-N' . str_pad((string) \Illuminate\Support\Facades\Cache::get('sh_pdf_report_seq', 1), 4, '0', STR_PAD_LEFT) . '-' . now()->format('Ymd-His') . '.pdf'
+                        );
+                    }),
             ])
             ->actions([
                 Tables\Actions\ViewAction::make(),
                 Tables\Actions\DeleteAction::make()
                     ->label('Anular')
-                    ->modalHeading('Anular Compra')
-                    ->modalDescription('¿Estás seguro de anular esta compra? Esto revertirá el stock automáticamente.')
+                    ->modalHeading('Anular Compra (Irreversible)')
+                    ->modalDescription('¿Estás seguro de anular esta compra? Esto descontará el stock ingresado y la compra quedará registrada como ANULADA.')
                     ->hidden(fn (Purchase $record): bool => $record->trashed()),
-                Tables\Actions\RestoreAction::make()
-                    ->label('Restaurar')
-                    ->modalHeading('Restaurar Compra')
-                    ->modalDescription('¿Deseas restaurar esta compra?')
-                    ->visible(fn (Purchase $record): bool => $record->trashed()),
             ])
-            ->bulkActions([
-                Tables\Actions\BulkActionGroup::make([
-                    Tables\Actions\DeleteBulkAction::make(),
-                ]),
-            ]);
+            ->bulkActions([]);
     }
 
     public static function getRelations(): array

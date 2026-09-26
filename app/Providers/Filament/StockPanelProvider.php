@@ -71,6 +71,9 @@ class StockPanelProvider extends PanelProvider
             ])
             ->resources([
                 \App\Filament\Admin\Resources\ProductResource::class,
+                \App\Filament\Admin\Resources\PurchaseResource::class,
+                \App\Filament\Admin\Resources\SupplierResource::class,
+                
             ])
             ->authMiddleware([
                 Authenticate::class,

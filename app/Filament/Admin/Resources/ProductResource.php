@@ -10,11 +10,15 @@ use Filament\Resources\Resource;
 use Filament\Support\Enums\FontWeight;
 use Filament\Tables;
 use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\SoftDeletingScope;
 
 class ProductResource extends Resource
 {
     protected static ?string $model = Product::class;
 
+    protected static ?string $navigationGroup = 'Tienda';
+    protected static ?int $navigationSort = 1;
     protected static ?string $navigationIcon = 'heroicon-o-musical-note';
     protected static ?string $navigationLabel = 'Productos / Catálogo';
     protected static ?string $modelLabel = 'Producto';
@@ -23,10 +27,10 @@ class ProductResource extends Resource
     public static function getProductTypeOptions(): array
     {
         return [
-            'cuerda'               => 'Instrumentos de Cuerda (Cordófonos)',
+            'cuerda'               => 'Instrumentos de Cuerda',
             'teclado'              => 'Teclados y Sintetizadores',
-            'percusion'            => 'Percusión (Membranófonos e Idiófonos)',
-            'viento'               => 'Instrumentos de Viento (Aerófonos)',
+            'percusion'            => 'Percusión',
+            'viento'               => 'Instrumentos de Viento',
             'amplificacion'        => 'Equipos de Amplificación y Altavoces',
             'procesador_interfase' => 'Procesadores de Señal, Mezcladoras e Interfaces',
             'microfono'            => 'Micrófonos',
@@ -37,7 +41,7 @@ class ProductResource extends Resource
     public static function getProductSpecsFormSchema(): array
     {
         return [
-            // 1. CORDÓFONOS (Guitarras, bajos, violines, ukeleles)
+
             Forms\Components\Group::make([
                 Forms\Components\Section::make('Especificaciones: Instrumentos de Cuerda')
                     ->schema([
@@ -90,7 +94,7 @@ class ProductResource extends Resource
             ])
             ->visible(fn (Forms\Get $get): bool => $get('type') === 'cuerda'),
 
-            // 2. TECLADOS Y SINTETIZADORES
+       
             Forms\Components\Group::make([
                 Forms\Components\Section::make('Especificaciones: Teclados y Sintetizadores')
                     ->schema([
@@ -390,7 +394,13 @@ class ProductResource extends Resource
                 ...self::getProductSpecsFormSchema(),
             ]);
     }
-
+    public static function getEloquentQuery(): Builder
+    {
+        return parent::getEloquentQuery()
+            ->withoutGlobalScopes([
+                SoftDeletingScope::class,
+            ]);
+    }
     public static function table(Table $table): Table
     {
         return $table
@@ -442,14 +452,172 @@ class ProductResource extends Resource
                     ->badge()
                     ->color(fn (int $state): string => $state > 5 ? 'success' : ($state > 0 ? 'warning' : 'danger'))
                     ->sortable(),
+                Tables\Columns\TextColumn::make('estado')
+                    ->label('Estado')
+                    ->badge()
+                    ->getStateUsing(fn (Product $record): string => $record->trashed() ? 'De Baja' : 'Activo')
+                    ->color(fn (string $state): string => $state === 'Activo' ? 'success' : 'danger'),
             ])
             ->filters([
-                //
+                // 1. Estado (Activos / Dados de Baja / Todos)
+                Tables\Filters\TrashedFilter::make()
+                    ->label('Estado en Catálogo')
+                    ->placeholder('Solo Activos')
+                    ->trueLabel('Todos (Activos + De Baja)')
+                    ->falseLabel('Solo Dados de Baja'),
+
+                // 2. Categoría Múltiple
+                Tables\Filters\SelectFilter::make('type')
+                    ->label('Categorías')
+                    ->options(self::getProductTypeOptions())
+                    ->multiple()
+                    ->preload(),
+
+                // 3. Semáforo de Stock
+                Tables\Filters\SelectFilter::make('semaforo_stock')
+                    ->label('Nivel de Stock')
+                    ->options([
+                        'normal'  => 'Stock Normal (> 5)',
+                        'critico' => 'Stock Crítico (1 a 5)',
+                        'agotado' => 'Agotados (0)',
+                    ])
+            ->query(function (Builder $query, array $data): Builder {
+                        return match ($data['value'] ?? null) {
+                            'normal'  => $query->where('stock', '>', 5),
+                            'critico' => $query->whereBetween('stock', [1, 5]),
+                            'agotado' => $query->where('stock', '<=', 0),
+                            default   => $query,
+                        };
+                    }),
+
+                // 4. Proveedor que lo suministra (vía ORM)
+                Tables\Filters\SelectFilter::make('proveedor')
+                    ->label('Proveedor')
+                    ->options(fn () => \App\Models\Supplier::pluck('name', 'id')->toArray())
+                    ->searchable()
+                    ->query(function (Builder $query, array $data): Builder {
+                        if (empty($data['value'])) {
+                            return $query;
+                        }
+                        return $query->whereHas('purchaseDetails.purchase', function (Builder $q) use ($data) {
+                            $q->where('supplier_id', $data['value']);
+                        });
+                    }),
+
+                // 5. Rotación en Ventas
+                Tables\Filters\TernaryFilter::make('rotacion')
+                    ->label('Rotación de Ventas')
+                    ->placeholder('Todos los productos')
+                    ->trueLabel('Con ventas registradas')
+                    ->falseLabel('Sin ventas (Stock inmovilizado)')
+                    ->queries(
+                        true: fn (Builder $q) => $q->has('invoiceDetails'),
+                        false: fn (Builder $q) => $q->doesntHave('invoiceDetails'),
+                    ),
+
+                // 6. Rango de Precio ($)
+                Tables\Filters\Filter::make('rango_precio')
+                    ->form([
+                        Forms\Components\TextInput::make('precio_min')
+                            ->label('Precio Mínimo ($)')
+                            ->numeric()
+                            ->prefix('$'),
+                        Forms\Components\TextInput::make('precio_max')
+                            ->label('Precio Máximo ($)')
+                            ->numeric()
+                            ->prefix('$'),
+                    ])
+                    ->columns(2)
+                    ->query(function (Builder $query, array $data): Builder {
+                        return $query
+                            ->when($data['precio_min'], fn (Builder $q, $min) => $q->where('price', '>=', $min))
+                            ->when($data['precio_max'], fn (Builder $q, $max) => $q->where('price', '<=', $max));
+                    }),
+
+                // 7. Rango Exacto de Stock (Unidades)
+                Tables\Filters\Filter::make('rango_stock')
+                    ->form([
+                        Forms\Components\TextInput::make('stock_min')
+                            ->label('Stock Mínimo')
+                            ->numeric(),
+                        Forms\Components\TextInput::make('stock_max')
+                            ->label('Stock Máximo')
+                            ->numeric(),
+                    ])
+                    ->columns(2)
+                    ->query(function (Builder $query, array $data): Builder {
+                        return $query
+                            ->when($data['stock_min'] !== null && $data['stock_min'] !== '', fn (Builder $q) => $q->where('stock', '>=', $data['stock_min']))
+                            ->when($data['stock_max'] !== null && $data['stock_max'] !== '', fn (Builder $q) => $q->where('stock', '<=', $data['stock_max']));
+                    }),
+
+                // 8. Rango de Fecha de Alta
+                Tables\Filters\Filter::make('created_at')
+                    ->form([
+                        Forms\Components\DatePicker::make('desde')
+                            ->label('Alta desde'),
+                        Forms\Components\DatePicker::make('hasta')
+                            ->label('Alta hasta'),
+                    ])
+                    ->columns(2)
+                    ->query(function (Builder $query, array $data): Builder {
+                        return $query
+                            ->when($data['desde'], fn (Builder $q, $date) => $q->whereDate('created_at', '>=', $date))
+                            ->when($data['hasta'], fn (Builder $q, $date) => $q->whereDate('created_at', '<=', $date));
+                    }),
+                        ])
+            ->filtersFormColumns(4)
+            ->filtersFormWidth(\Filament\Support\Enums\MaxWidth::FourExtraLarge)
+            ->headerActions([
+                Tables\Actions\Action::make('exportar_pdf')
+                    ->label('Exportar PDF')
+                    ->icon('heroicon-m-document-arrow-down')
+                    ->color('primary')
+                    ->action(function ($livewire) {
+                        $records = $livewire->getFilteredSortedTableQuery()->get();
+                        $types = self::getProductTypeOptions();
+
+                        $valorInventario = $records->sum(fn ($p) => ((float) $p->price) * ((int) $p->stock));
+
+                        $pdf = \Barryvdh\DomPDF\Facade\Pdf::loadView('reports.pdf-generic', [
+                            'title'   => 'Reporte de Inventario y Catálogo de Productos',
+                            'summary' => [
+                                'Total Productos Filtrados' => $records->count(),
+                                'Unidades Totales en Stock' => $records->sum('stock'),
+                                'Stock Crítico / Agotado'   => $records->where('stock', '<=', 3)->count(),
+                                'Valorización de Stock'     => '$' . number_format($valorInventario, 2, ',', '.'),
+                            ],
+                            'headers' => ['ID', 'Producto', 'Categoría', 'Precio Venta ($)', 'Stock Actual', 'Estado'],
+                            'rows'    => $records->map(fn ($r) => [
+                                '#' . str_pad($r->id, 4, '0', STR_PAD_LEFT),
+                                $r->name,
+                                $types[$r->type] ?? $r->type,
+                                '$' . number_format((float) $r->price, 2, ',', '.'),
+                                $r->stock . ' u.',
+                                $r->trashed() ? 'Inactivo' : ($r->stock <= 0 ? 'Agotado' : ($r->stock <= 3 ? 'Crítico' : 'Normal')),
+                            ])->toArray(),
+                        ])->setPaper('a4', 'landscape');
+
+                        return response()->streamDownload(
+                            fn () => print($pdf->output()),
+                            'reporte-productos-N' . str_pad((string) \Illuminate\Support\Facades\Cache::get('sh_pdf_report_seq', 1), 4, '0', STR_PAD_LEFT) . '-' . now()->format('Ymd-His') . '.pdf'
+                        );
+                    }),
             ])
             ->actions([
                 Tables\Actions\EditAction::make()
-                    ->color('primary'),
-                Tables\Actions\DeleteAction::make(),
+                    ->color('primary')
+                    ->hidden(fn (Product $record): bool => $record->trashed()),
+
+                Tables\Actions\DeleteAction::make()
+                    ->label('Dar de baja')
+                    ->modalHeading('Dar de baja Producto')
+                    ->modalDescription('¿Estás seguro de dar de baja este producto? Se ocultará de la tienda pero conservará su historial.')
+                    ->hidden(fn (Product $record): bool => $record->trashed()),
+
+                Tables\Actions\RestoreAction::make()
+                    ->label('Reactivar')
+                    ->visible(fn (Product $record): bool => $record->trashed()),
             ])
             ->bulkActions([
                 Tables\Actions\BulkActionGroup::make([

@@ -6,6 +6,7 @@ return new class extends Migration {
     public function up() {
         Schema::create('customers', function (Blueprint $table) {
             $table->id(); 
+            $table->foreignId('user_id')->nullable()->unique()->constrained('users')->nullOnDelete();
             $table->string('document_number'); 
             $table->string('last_name'); 
             $table->string('first_name'); 
@@ -15,6 +16,7 @@ return new class extends Migration {
             $table->string('tax_condition'); 
             $table->string('email'); 
             $table->foreignId('city_id')->constrained('cities'); 
+            $table->softDeletes();
             $table->timestamps();
         });
     }

@@ -5,8 +5,6 @@ namespace App\Filament\Admin\Resources\PurchaseResource\Pages;
 use App\Filament\Admin\Resources\PurchaseResource;
 use Filament\Actions;
 use Filament\Resources\Pages\ListRecords;
-use Filament\Resources\Components\Tab;
-use Illuminate\Database\Eloquent\Builder;
 
 class ListPurchases extends ListRecords
 {
@@ -17,20 +15,6 @@ class ListPurchases extends ListRecords
         return [
             Actions\CreateAction::make()
                 ->label('Nueva Compra'),
-        ];
-    }
-
-    public function getTabs(): array
-    {
-        return [
-            'activas' => Tab::make('Compras Activas')
-                ->modifyQueryUsing(fn (Builder $query) => $query->whereNull('deleted_at')),
-                
-            'anuladas' => Tab::make('Compras Anuladas')
-                ->modifyQueryUsing(fn (Builder $query) => $query->whereNotNull('deleted_at')),
-                
-            'todas' => Tab::make('Todas')
-                ->modifyQueryUsing(fn (Builder $query) => $query),
         ];
     }
 }

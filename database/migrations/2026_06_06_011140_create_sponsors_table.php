@@ -5,7 +5,13 @@ use Illuminate\Support\Facades\Schema;
 return new class extends Migration {
     public function up() {
         Schema::create('sponsors', function (Blueprint $table) {
-            $table->id(); $table->string('name'); $table->string('type'); $table->string('phone'); $table->string('email'); $table->timestamps();
+            $table->id(); 
+            $table->string('name'); 
+            $table->string('type'); 
+            $table->string('phone'); 
+            $table->string('email'); 
+            $table->softDeletes();
+            $table->timestamps();
         });
     }
     public function down() { Schema::dropIfExists('sponsors'); }

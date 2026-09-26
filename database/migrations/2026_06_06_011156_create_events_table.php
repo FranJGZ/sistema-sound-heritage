@@ -5,7 +5,14 @@ use Illuminate\Support\Facades\Schema;
 return new class extends Migration {
     public function up() {
         Schema::create('events', function (Blueprint $table) {
-            $table->id(); $table->string('name'); $table->date('date'); $table->string('type'); $table->integer('capacity'); $table->foreignId('venue_id')->constrained('venues'); $table->timestamps();
+            $table->id(); 
+            $table->string('name'); 
+            $table->date('date'); 
+            $table->string('type'); 
+            $table->integer('capacity'); 
+            $table->foreignId('venue_id')->constrained('venues'); 
+            $table->softDeletes();
+            $table->timestamps();
         });
     }
     public function down() { Schema::dropIfExists('events'); }

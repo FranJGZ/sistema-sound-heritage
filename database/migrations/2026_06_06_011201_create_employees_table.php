@@ -5,7 +5,17 @@ use Illuminate\Support\Facades\Schema;
 return new class extends Migration {
     public function up() {
         Schema::create('employees', function (Blueprint $table) {
-            $table->id(); $table->string('document_number'); $table->string('last_name'); $table->string('first_name'); $table->string('address'); $table->string('phone'); $table->foreignId('city_id')->constrained('cities'); $table->foreignId('employee_category_id')->constrained('employee_categories'); $table->timestamps();
+            $table->id(); 
+            $table->foreignId('user_id')->nullable()->unique()->constrained('users')->nullOnDelete();
+            $table->string('document_number'); 
+            $table->string('last_name'); 
+            $table->string('first_name'); 
+            $table->string('address'); 
+            $table->string('phone'); 
+            $table->foreignId('city_id')->constrained('cities'); 
+            $table->foreignId('employee_category_id')->constrained('employee_categories'); 
+            $table->softDeletes();
+            $table->timestamps();
         });
     }
     public function down() { Schema::dropIfExists('employees'); }

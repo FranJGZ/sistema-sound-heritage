@@ -61,22 +61,28 @@
                         <ul tabindex="0" class="dropdown-content z-50 menu p-2 shadow-lg bg-base-100 border border-base-200 rounded-2xl w-52 text-xs gap-1 mt-2">
                             <li class="menu-title text-[10px] text-base-content/50 uppercase">Mi Cuenta</li>
                             
-                            @if(auth()->user()->hasRole('Administrador'))
+                                                       @if(auth()->user()?->hasRole('Administrador'))
                                 <li>
                                     <a href="/admin" class="text-primary font-bold hover:bg-primary/10">
                                         <x-mary-icon name="o-cog-6-tooth" class="w-4 h-4" />
                                         Panel de Administración
                                     </a>
                                 </li>
-                            @elseif(auth()->user()->hasRole('Encargado de Stock'))
+                            @elseif(auth()->user()?->hasRole('Encargado de Stock'))
                                 <li>
                                     <a href="/stock" class="text-warning font-bold hover:bg-warning/10">
                                         <x-mary-icon name="o-archive-box" class="w-4 h-4" />
                                         Panel de Stock
                                     </a>
                                 </li>
+                            @elseif(auth()->user()?->hasRole('Vendedor'))
+                                <li>
+                                    <a href="/vendedor" class="text-info font-bold hover:bg-info/10">
+                                        <x-mary-icon name="o-shopping-bag" class="w-4 h-4" />
+                                        Panel de Ventas
+                                    </a>
+                                </li>
                             @endif
-                            <li>
                                 <a href="{{ route('profile.edit') }}">
                                     <x-mary-icon name="o-user" class="w-4 h-4" />
                                     Mi Perfil

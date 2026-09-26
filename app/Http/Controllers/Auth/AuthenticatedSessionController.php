@@ -40,8 +40,14 @@ class AuthenticatedSessionController extends Controller
             return redirect()->intended('/stock');
         }
 
-        // 3. El Cliente (o cualquier otro) va a la tienda
+        // 3. El Vendedor va a su panel de ventas
+        if ($user->hasRole('Vendedor')) {
+            return redirect()->intended('/vendedor');
+        }
+
+        // 4. El Cliente (o cualquier otro) va a la tienda
         return redirect()->intended('/');
+    }
 
     /**
      * Destroy an authenticated session.

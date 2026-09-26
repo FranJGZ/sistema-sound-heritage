@@ -3,11 +3,11 @@
 namespace App\Filament\Admin\Resources;
 
 use App\Filament\Admin\Resources\UserResource\Pages;
-use App\Filament\Admin\Resources\UserResource\RelationManagers;
 use App\Models\User;
 use Filament\Forms;
 use Filament\Forms\Form;
 use Filament\Resources\Resource;
+use Filament\Support\Enums\FontWeight;
 use Filament\Tables;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
@@ -16,83 +16,170 @@ use Illuminate\Database\Eloquent\SoftDeletingScope;
 class UserResource extends Resource
 {
     protected static ?string $model = User::class;
+    protected static ?string $navigationGroup = 'Administración y RRHH';
+    protected static ?int $navigationSort = 2;
+    protected static ?string $navigationIcon = 'heroicon-o-shield-check';
+    protected static ?string $navigationLabel = 'Usuarios y Roles';
+    protected static ?string $modelLabel = 'Usuario';
+    protected static ?string $pluralModelLabel = 'Usuarios';
 
-    protected static ?string $navigationIcon = 'heroicon-o-rectangle-stack';
-
-        public static function form(Form $form): Form
+    public static function canCreate(): bool
     {
-        return $form
-            ->schema([
-                \Filament\Forms\Components\TextInput::make('name')
-                    ->label('Nombre')
-                    ->required()
-                    ->maxLength(255),
+        // Las cuentas nacen desde Empleados, Clientes o el Registro Web
+        return false;
+    }
 
-                \Filament\Forms\Components\TextInput::make('email')
-                    ->label('Correo Electrónico')
-                    ->email()
-                    ->required()
-                    ->maxLength(255),
-
-                \Filament\Forms\Components\TextInput::make('password')
-                    ->label('Contraseña')
-                    ->password()
-                    ->dehydrated(fn ($state) => filled($state))
-                    ->required(fn (string $context): bool => $context === 'create'),
-
-                // SELECTOR MÚLTIPLE DE ROLES DE SPATIE
-                \Filament\Forms\Components\Select::make('roles')
-                    ->label('Roles Asignados')
-                    ->relationship('roles', 'name')
-                    ->multiple()
-                    ->preload()
-                    ->searchable(),
+    public static function getEloquentQuery(): Builder
+    {
+        return parent::getEloquentQuery()
+            ->with(['roles', 'employee', 'customer'])
+            ->withoutGlobalScopes([
+                SoftDeletingScope::class,
             ]);
     }
 
-        public static function table(Table $table): Table
+    public static function form(Form $form): Form
+    {
+        return $form
+            ->schema([
+                Forms\Components\Section::make('Datos de la Cuenta (Vinculados)')
+                    ->description('El nombre y correo provienen de la ficha del Empleado o Cliente asociado.')
+                    ->icon('heroicon-m-user-circle')
+                    ->schema([
+                        Forms\Components\TextInput::make('name')
+                            ->label('Nombre Completo')
+                            ->disabled()
+                            ->dehydrated(false),
+
+                        Forms\Components\TextInput::make('email')
+                            ->label('Correo Electrónico')
+                            ->email()
+                            ->disabled()
+                            ->dehydrated(false),
+                    ])
+                    ->columns(2),
+
+                Forms\Components\Section::make('Permisos y Seguridad')
+                    ->description('Modificá los roles de acceso al sistema o blanqueá la contraseña en caso de extravío.')
+                    ->icon('heroicon-m-key')
+                    ->schema([
+                        Forms\Components\Select::make('roles')
+                            ->label('Roles Asignados')
+                            ->relationship('roles', 'name')
+                            ->multiple()
+                            ->preload()
+                            ->searchable()
+                            ->required(),
+
+                        Forms\Components\TextInput::make('password')
+                            ->label('Nueva Contraseña (Opcional)')
+                            ->password()
+                            ->revealable()
+                            ->placeholder('Dejar vacío para mantener la actual')
+                            ->dehydrated(fn ($state) => filled($state))
+                            ->required(false),
+                    ])
+                    ->columns(2),
+            ]);
+    }
+
+    public static function table(Table $table): Table
     {
         return $table
             ->columns([
-                \Filament\Tables\Columns\TextColumn::make('name')
-                    ->label('Nombre')
-                    ->searchable(),
+                Tables\Columns\TextColumn::make('id')
+                    ->label('ID')
+                    ->formatStateUsing(fn ($state): string => '#' . str_pad($state, 4, '0', STR_PAD_LEFT))
+                    ->weight(FontWeight::SemiBold)
+                    ->color('gray')
+                    ->sortable(),
 
-                \Filament\Tables\Columns\TextColumn::make('email')
+                Tables\Columns\TextColumn::make('name')
+                    ->label('Usuario')
+                    ->weight(FontWeight::Bold)
+                    ->searchable()
+                    ->sortable(),
+
+                Tables\Columns\TextColumn::make('email')
                     ->label('Correo Electrónico')
+                    ->icon('heroicon-m-envelope')
                     ->searchable(),
 
-                // MUESTRA LOS ROLES COMO ETIQUETAS DE COLORES
-                \Filament\Tables\Columns\TextColumn::make('roles.name')
+                Tables\Columns\TextColumn::make('origen')
+                    ->label('Ficha Vinculada')
+                    ->badge()
+                    ->getStateUsing(function (User $record): string {
+                        if ($record->employee) {
+                            return 'Empleado (DNI ' . $record->employee->document_number . ')';
+                        }
+                        if ($record->customer) {
+                            return 'Cliente (DNI ' . $record->customer->document_number . ')';
+                        }
+                        return 'Cuenta de Sistema / Web';
+                    })
+                    ->color(fn (string $state): string => match (true) {
+                        str_starts_with($state, 'Empleado') => 'info',
+                        str_starts_with($state, 'Cliente')  => 'success',
+                        default                             => 'gray',
+                    }),
+
+                Tables\Columns\TextColumn::make('roles.name')
                     ->label('Roles')
                     ->badge()
                     ->color(fn (string $state): string => match ($state) {
-                        'Administrador' => 'danger',
-                        'Vendedor' => 'warning',
+                        'Administrador'      => 'danger',
+                        'Vendedor'           => 'warning',
                         'Encargado de Stock' => 'info',
-                        'Empleado' => 'gray',
-                        default => 'success',
+                        default              => 'success',
                     }),
+
+                Tables\Columns\TextColumn::make('estado')
+                    ->label('Estado')
+                    ->badge()
+                    ->getStateUsing(fn (User $record): string => $record->trashed() ? 'Suspendido' : 'Activo')
+                    ->color(fn (string $state): string => $state === 'Activo' ? 'success' : 'danger'),
+            ])
+            ->filters([
+                Tables\Filters\TrashedFilter::make()
+                    ->label('Estado de la Cuenta')
+                    ->placeholder('Solo cuentas activas')
+                    ->trueLabel('Todas (Activas + Suspendidas)')
+                    ->falseLabel('Solo cuentas suspendidas'),
+
+                Tables\Filters\SelectFilter::make('roles')
+                    ->label('Filtrar por Rol')
+                    ->relationship('roles', 'name')
+                    ->preload(),
             ])
             ->actions([
-                \Filament\Tables\Actions\EditAction::make(),
-                \Filament\Tables\Actions\DeleteAction::make(),
-            ]);
+                Tables\Actions\EditAction::make()
+                    ->label('Roles / Clave')
+                    ->hidden(fn (User $record): bool => $record->trashed()),
+
+                Tables\Actions\DeleteAction::make()
+                    ->label('Suspender')
+                    ->modalHeading('Suspender acceso de usuario')
+                    ->modalDescription('¿Estás seguro de suspender esta cuenta? El usuario ya no podrá iniciar sesión en el sistema.')
+                    ->hidden(fn (User $record): bool => $record->trashed() || $record->id === auth()->id()),
+
+                Tables\Actions\RestoreAction::make()
+                    ->label('Reactivar')
+                    ->modalHeading('Reactivar cuenta de usuario')
+                    ->visible(fn (User $record): bool => $record->trashed()),
+            ])
+            ->bulkActions([]);
     }
 
     public static function getRelations(): array
     {
-        return [
-            //
-        ];
+        return [];
     }
 
     public static function getPages(): array
     {
         return [
             'index' => Pages\ListUsers::route('/'),
-            'create' => Pages\CreateUser::route('/create'),
-            'edit' => Pages\EditUser::route('/{record}/edit'),
+            'edit'  => Pages\EditUser::route('/{record}/edit'),
         ];
     }
 }

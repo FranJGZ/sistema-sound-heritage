@@ -16,7 +16,8 @@ use Illuminate\Database\Eloquent\SoftDeletingScope;
 class SupplierResource extends Resource
 {
     protected static ?string $model = Supplier::class;
-
+    protected static ?string $navigationGroup = 'Tienda';
+    protected static ?int $navigationSort = 5;
     protected static ?string $navigationIcon = 'heroicon-o-building-storefront';
     protected static ?string $navigationLabel = 'Proveedores';
     protected static ?string $modelLabel = 'Proveedor';
@@ -120,8 +121,12 @@ class SupplierResource extends Resource
                     ->sortable()
                     ->toggleable(isToggledHiddenByDefault: true),
             ])
-            ->filters([
-                // Las pestañas superiores gestionan Activos / Dados de Baja / Todos
+                        ->filters([
+                Tables\Filters\TrashedFilter::make()
+                    ->label('Estado del Proveedor')
+                    ->placeholder('Solo Proveedores Activos')
+                    ->trueLabel('Todos (Activos + Dados de Baja)')
+                    ->falseLabel('Solo Dados de Baja'),
             ])
             ->actions([
                 Tables\Actions\EditAction::make()
@@ -172,5 +177,19 @@ class SupplierResource extends Resource
             'create' => Pages\CreateSupplier::route('/create'),
             'edit'   => Pages\EditSupplier::route('/{record}/edit'),
         ];
+    }
+    public static function canCreate(): bool
+    {
+        return auth()->user()?->hasRole('Administrador') ?? false;
+    }
+
+    public static function canEdit(\Illuminate\Database\Eloquent\Model $record): bool
+    {
+        return auth()->user()?->hasRole('Administrador') ?? false;
+    }
+
+    public static function canDelete(\Illuminate\Database\Eloquent\Model $record): bool
+    {
+        return auth()->user()?->hasRole('Administrador') ?? false;
     }
 }

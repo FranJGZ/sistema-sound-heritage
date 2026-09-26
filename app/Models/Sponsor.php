@@ -1,7 +1,25 @@
 <?php
+
 namespace App\Models;
+
 use Illuminate\Database\Eloquent\Model;
-class Sponsor extends Model {
-    protected $fillable = ['name', 'type', 'phone', 'email'];
-    public function eventSponsors() { return $this->hasMany(EventSponsor::class); }
+use Illuminate\Database\Eloquent\SoftDeletes;
+use OwenIt\Auditing\Contracts\Auditable;
+
+class Sponsor extends Model implements Auditable
+{
+    use SoftDeletes;
+    use \OwenIt\Auditing\Auditable;
+
+    protected $fillable = [
+        'name', 
+        'type', 
+        'phone', 
+        'email'
+    ];
+
+    public function eventSponsors()
+    {
+        return $this->hasMany(EventSponsor::class);
+    }
 }
