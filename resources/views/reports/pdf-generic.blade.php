@@ -2,155 +2,77 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <title>{{ $title ?? 'Reporte Gerencial' }} - Sound Heritage</title>
+    <title>{{ $title ?? 'Reporte' }}</title>
     <style>
-        * { box-sizing: border-box; font-family: 'Helvetica', 'Arial', sans-serif; }
-        body { font-size: 11px; color: #1e293b; margin: 0; padding: 15px; }
-        .header {
-            border-bottom: 3px solid #b48d56;
-            padding-bottom: 12px;
-            margin-bottom: 15px;
-            width: 100%;
-        }
-        .header-table { width: 100%; border-collapse: collapse; }
-        .brand-title {
-            font-size: 20px;
-            font-weight: bold;
-            color: #0b1031;
-            letter-spacing: 1px;
-            margin: 0;
-        }
-        .brand-subtitle {
-            font-size: 10px;
-            color: #64748b;
-            margin-top: 3px;
-        }
-        .report-box {
-            text-align: right;
-        }
-        .report-title {
-            font-size: 15px;
-            font-weight: bold;
-            color: #b48d56;
-            text-transform: uppercase;
-            margin: 0;
-        }
-        .report-meta {
-            font-size: 9.5px;
-            color: #475569;
-            margin-top: 4px;
-        }
-        .summary-table {
-            width: 100%;
-            border-collapse: separate;
-            border-spacing: 8px 0;
-            margin: 0 -8px 15px -8px;
-        }
-        .summary-card {
-            background-color: #f8fafc;
-            border: 1px solid #e2e8f0;
-            border-left: 4px solid #0b1031;
-            padding: 8px 12px;
-            border-radius: 4px;
-        }
-        .summary-label {
-            font-size: 9px;
-            text-transform: uppercase;
-            color: #64748b;
-            font-weight: bold;
-        }
-        .summary-value {
-            font-size: 14px;
-            font-weight: bold;
-            color: #0b1031;
-            margin-top: 2px;
-        }
-        table.data-table {
-            width: 100%;
-            border-collapse: collapse;
-            margin-top: 6px;
-        }
-        table.data-table th {
-            background-color: #0b1031;
-            color: #ffffff;
-            text-align: left;
-            padding: 7px 8px;
-            font-size: 9.5px;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-            border: 1px solid #0b1031;
-        }
-        table.data-table td {
-            padding: 6px 8px;
-            border-bottom: 1px solid #e2e8f0;
-            font-size: 10px;
-            color: #334155;
-        }
-        table.data-table tr:nth-child(even) td {
-            background-color: #f8fafc;
-        }
-        .badge {
-            display: inline-block;
-            padding: 2px 6px;
-            font-size: 8.5px;
-            font-weight: bold;
-            border-radius: 3px;
-            text-transform: uppercase;
-        }
-        .footer {
-            margin-top: 20px;
-            padding-top: 8px;
-            border-top: 1px solid #cbd5e1;
-            font-size: 9px;
-            color: #64748b;
-            text-align: center;
-        }
+        /* Reserva 155px arriba para que entren el encabezado y las cajas de resumen sin pisar la tabla */
+        @page { margin: 155px 30px 45px 30px; }
+
+        body { font-family: sans-serif; font-size: 10px; color: #1e293b; }
+        table { width: 100%; border-collapse: collapse; margin-bottom: 10px; }
+        th { background: #0b1031; color: white; text-align: left; padding: 6px; font-size: 9px; }
+        td { padding: 5px 6px; border-bottom: 1px solid #e2e8f0; font-size: 9px; }
+        .caja-resumen { background: #f8fafc; border: 1px solid #e2e8f0; border-left: 4px solid #0b1031; padding: 5px 8px; }
+
+        /* Fija todo el bloque superior (logo, datos, filtros y cajas) en la parte superior de cada página */
+        header { position: fixed; top: -140px; left: 0; right: 0; }
+        footer { position: fixed; bottom: -30px; left: 0; right: 0; text-align: center; font-size: 9px; color: #64748b; border-top: 1px solid #e2e8f0; padding-top: 4px; }
+
+        .numero-pagina:after { content: counter(page); }
     </style>
 </head>
 <body>
-    @php
-        $store = \App\Models\Store::first();
-        $seq = str_pad((string) \Illuminate\Support\Facades\Cache::increment('sh_pdf_report_seq'), 4, '0', STR_PAD_LEFT);
-        $reportCode = $reportCode ?? ('REP-' . $seq . '-' . now()->format('dmY-His'));
-    @endphp
 
-    <div class="header">
-        <table class="header-table">
+    <!-- BLOQUE SUPERIOR COMPLETO: SE REPITE EN TODAS LAS HOJAS -->
+    <header>
+        <!-- 1. Encabezado institucional -->
+        <table style="border-bottom: 2.5px solid #b48d56; margin-bottom: 6px;">
             <tr>
-                <td style="width: 55%;">
-                    <p class="brand-title">{{ $store->company_name ?? 'SOUND HERITAGE' }}</p>
-                    <div class="brand-subtitle">
-                        CUIT: {{ $store->tax_id ?? '30-11223344-5' }} | {{ $store->tax_condition ?? 'Responsable Inscripto' }}<br>
-                        Dirección: {{ $store->address ?? 'Calle Colón 1234' }} | Tel: {{ $store->phone ?? '3764123456' }}
-                    </div>
+                <td style="border: none; padding: 0 0 4px 0;">
+                    <h2 style="color: #0b1031; margin: 0; font-size: 15px;">SOUND HERITAGE</h2>
+                    <small style="font-size: 8.5px; color: #475569;">
+                        CUIT: 30-11223344-5 | Responsable Inscripto | Dir: Calle Colón 1234 | Tel: 3764123456
+                    </small>
                 </td>
-                <td class="report-box" style="width: 45%;">
-                    <p class="report-title">{{ $title ?? 'Reporte del Sistema' }}</p>
-                    <div class="report-meta">
-                        <strong>Reporte N°:</strong> {{ $reportCode }}<br>
-                        <strong>Fecha de emisión:</strong> {{ now()->format('d/m/Y H:i:s') }} hs<br>
-                        <strong>Emitido por:</strong> {{ auth()->user()->name ?? 'Administrador' }}<br>
-                        <strong>Registros incluidos:</strong> {{ count($rows ?? []) }}
-                    </div>
+                <td style="border: none; padding: 0 0 4px 0; text-align: right;">
+                    <h3 style="color: #b48d56; margin: 0; font-size: 13px;">{{ $title ?? 'Reporte del Sistema' }}</h3>
+                    <small style="font-size: 8.5px;">
+                        <strong>Fecha:</strong> {{ now()->timezone(config('app.timezone', 'America/Argentina/Buenos_Aires'))->format('d/m/Y H:i') }} hs |
+                        <strong>Usuario:</strong> {{ auth()->user()->name ?? 'Administrador' }} |
+                        <strong>Registros:</strong> {{ count($rows ?? []) }}
+                    </small>
                 </td>
             </tr>
         </table>
-    </div>
 
-    @if(!empty($summary))
-        <table class="summary-table">
-            <tr>
-                @foreach($summary as $label => $value)
-                    <td class="summary-card">
-                        <div class="summary-label">{{ $label }}</div>
-                        <div class="summary-value">{{ $value }}</div>
-                    </td>
-                @endforeach
-            </tr>
-        </table>
-    @endif
+        <!-- 2. Filtros aplicados -->
+        @if(!empty($filtros_aplicados))
+            <div style="background-color: #f1f5f9; border: 1px solid #cbd5e1; border-radius: 4px; padding: 3px 8px; margin-bottom: 6px; font-size: 8.5px; color: #334155;">
+                <strong style="color: #0b1031;">Filtros aplicados:</strong> {{ $filtros_aplicados }}
+            </div>
+        @endif
 
-    <table class="data-table">
+        <!-- 3. Cajas de resumen -->
+        @if(!empty($summary))
+            <table style="margin-bottom: 0;">
+                <tr>
+                    @foreach($summary as $label => $value)
+                        <td class="caja-resumen" style="border-bottom: none;">
+                            <small style="font-size: 8px; color: #64748b; text-transform: uppercase;">{{ $label }}</small><br>
+                            <strong style="font-size: 12px; color: #0b1031;">{{ $value }}</strong>
+                        </td>
+                    @endforeach
+                </tr>
+            </table>
+        @endif
+    </header>
+
+    <!-- PIE DE PÁGINA FIJO -->
+    <footer>
+        Sound Heritage — Documento de uso interno confidencial | Página <span class="numero-pagina"></span>
+    </footer>
+
+    <!-- TABLA DE DATOS -->
+    <table>
         <thead>
             <tr>
                 @foreach($headers as $header)
@@ -159,24 +81,23 @@
             </tr>
         </thead>
         <tbody>
-            @forelse($rows as $row)
+            @if(count($rows) > 0)
+                @foreach($rows as $row)
+                    <tr>
+                        @foreach($row as $cell)
+                            <td>{{ $cell }}</td>
+                        @endforeach
+                    </tr>
+                @endforeach
+            @else
                 <tr>
-                    @foreach($row as $cell)
-                        <td>{{ $cell }}</td>
-                    @endforeach
-                </tr>
-            @empty
-                <tr>
-                    <td colspan="{{ count($headers) }}" style="text-align: center; padding: 15px;">
-                        No se encontraron registros con los filtros seleccionados.
+                    <td colspan="{{ count($headers) }}" style="text-align: center; padding: 12px;">
+                        No se encontraron registros para los filtros seleccionados.
                     </td>
                 </tr>
-            @endforelse
+            @endif
         </tbody>
     </table>
 
-    <div class="footer">
-        Documento oficial de uso interno generado por el sistema ERP Sound Heritage — {{ now()->format('Y') }}
-    </div>
 </body>
 </html>

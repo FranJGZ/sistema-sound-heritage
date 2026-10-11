@@ -2,6 +2,7 @@
     x-data="{
         theme: localStorage.getItem('theme') || 'light',
         init() {
+            window.setupDualLogos();
             this.applyTheme(this.theme);
         },
         toggle() {
@@ -16,10 +17,8 @@
                 document.documentElement.classList.remove('dark');
             }
 
-            // 1. Avisarle al evento interno de Filament
             window.dispatchEvent(new CustomEvent('theme-changed', { detail: t }));
 
-            // 2. Sincronizar la memoria de Alpine de Filament
             if (window.Alpine && window.Alpine.store('theme')) {
                 window.Alpine.store('theme', t);
             }
@@ -47,7 +46,37 @@
 </div>
 
 <script>
-    // Garantiza que al cambiar de menú sin recargar, no se pierda el tema
+    window.setupDualLogos = function () {
+        document.querySelectorAll('.fi-sidebar-header, .fi-topbar').forEach((container) => {
+            if (container.querySelector('.sh-logo-dark')) return;
+
+            const logos = container.querySelectorAll('img.fi-logo');
+            if (logos.length === 0) return;
+
+            const wrapper = document.createElement('div');
+            wrapper.style.cssText = 'display: flex; flex-direction: row; align-items: center;';
+            wrapper.innerHTML = `
+                <div class="sh-logo-light" style="display: flex; flex-direction: row; align-items: center; gap: 10px; flex-wrap: nowrap;">
+                    <div style="height: 44px; width: 44px; display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
+                        <img src="{{ asset('img/LogoTiendaNegro.png') }}" alt="Sound Heritage Icono" style="height: 44px; width: 44px; object-fit: contain; display: block;" />
+                    </div>
+                    <img src="{{ asset('img/LetrasTiendaNegro.png') }}" alt="Sound Heritage" style="height: 24px; width: auto; object-fit: contain; display: block; flex-shrink: 0;" />
+                </div>
+                <div class="sh-logo-dark" style="display: none; flex-direction: row; align-items: center; gap: 10px; flex-wrap: nowrap;">
+                    <div style="height: 44px; width: 44px; display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
+                        <img src="{{ asset('img/LogoTiendaBlanco.png') }}" alt="Sound Heritage Icono" style="height: 92px; width: auto; max-width: none; object-fit: contain; transform: translate(1px, 11.5px); display: block; pointer-events: none;" />
+                    </div>
+                    <img src="{{ asset('img/LetrasTiendaBlanco.png') }}" alt="Sound Heritage" style="height: 24px; width: auto; object-fit: contain; display: block; flex-shrink: 0;" />
+                </div>
+            `;
+
+            logos[0].parentNode.insertBefore(wrapper, logos[0]);
+            logos.forEach(img => img.remove());
+        });
+    };
+
+    document.addEventListener('DOMContentLoaded', () => window.setupDualLogos());
+
     document.addEventListener('livewire:navigated', () => {
         const savedTheme = localStorage.getItem('theme') || 'light';
         if (savedTheme === 'dark') {
@@ -55,6 +84,7 @@
         } else {
             document.documentElement.classList.remove('dark');
         }
+        window.setupDualLogos();
         if (window.Alpine && window.Alpine.store('theme')) {
             window.Alpine.store('theme', savedTheme);
         }

@@ -415,7 +415,7 @@ class SegmentacionClientesChart extends ChartWidget
 
     protected function getData(): array
     {
-        $customers = Customer::withCount('invoices')->get();
+        $customers = Customer::where('document_number', '!=', '0')->withCount('invoices')->get();
 
         $oneTime    = max(3, $customers->where('invoices_count', 1)->count());
         $occasional = max(2, $customers->whereBetween('invoices_count', [2, 3])->count());

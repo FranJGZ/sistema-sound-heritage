@@ -14,7 +14,10 @@ Route::get('/', HomeTienda::class);
 // RUTAS BÁSICAS DE AUTENTICACIÓN (Cualquiera que inicie sesión)
 // -----------------------------------------------------------------------------
 Route::get('/dashboard', function () {
-    return view('dashboard');
+    if (auth()->check() && auth()->user()->hasRole('Administrador')) {
+        return redirect('/admin');
+    }
+    return redirect('/');
 })->middleware(['auth', 'verified'])->name('dashboard');
 
 Route::middleware('auth')->group(function () {
@@ -45,10 +48,6 @@ Route::middleware(['auth', 'role:Administrador'])->group(function () {
     Route::put('/usuarios/{user}/roles', [UserController::class, 'updateRoles'])->name('users.roles.update');
 });
 
-
-Route::get('/tutorial', function () {
-    return view('tutorial.index');
-})->middleware(['auth'])->name('tutorial');
 
 
 // -----------------------------------------------------------------------------

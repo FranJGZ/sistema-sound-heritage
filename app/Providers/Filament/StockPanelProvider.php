@@ -6,29 +6,31 @@ use Filament\Http\Middleware\Authenticate;
 use Filament\Http\Middleware\AuthenticateSession;
 use Filament\Http\Middleware\DisableBladeIconComponents;
 use Filament\Http\Middleware\DispatchServingFilamentEvent;
+use Filament\Navigation\MenuItem;
 use Filament\Pages;
 use Filament\Panel;
 use Filament\PanelProvider;
 use Filament\Support\Colors\Color;
+use Filament\View\PanelsRenderHook;
 use Filament\Widgets;
 use Illuminate\Cookie\Middleware\AddQueuedCookiesToResponse;
 use Illuminate\Cookie\Middleware\EncryptCookies;
 use Illuminate\Foundation\Http\Middleware\VerifyCsrfToken;
 use Illuminate\Routing\Middleware\SubstituteBindings;
 use Illuminate\Session\Middleware\StartSession;
-use Illuminate\View\Middleware\ShareErrorsFromSession;
-use Filament\View\PanelsRenderHook;
 use Illuminate\Support\HtmlString;
+use Illuminate\View\Middleware\ShareErrorsFromSession;
 
 class StockPanelProvider extends PanelProvider
 {
     public function panel(Panel $panel): Panel
     {
-                return $panel
+        return $panel
             ->id('stock')
             ->path('stock')
             ->brandName('Sound Heritage - Stock')
             ->brandLogo(asset('img/Logo_SH.png'))
+            ->darkModeBrandLogo(asset('img/Logo_blanco_sh.png'))
             ->brandLogoHeight('3.2rem')
             ->font('Figtree')
             ->colors([
@@ -39,6 +41,12 @@ class StockPanelProvider extends PanelProvider
                 'success'   => Color::Emerald,
                 'warning'   => Color::Amber,
                 'danger'    => Color::Rose,
+            ])
+            ->userMenuItems([
+                MenuItem::make()
+                    ->label('Volver a la Tienda')
+                    ->url('/')
+                    ->icon('heroicon-o-building-storefront'),
             ])
             ->renderHook(
                 PanelsRenderHook::USER_MENU_BEFORE,
@@ -73,7 +81,6 @@ class StockPanelProvider extends PanelProvider
                 \App\Filament\Admin\Resources\ProductResource::class,
                 \App\Filament\Admin\Resources\PurchaseResource::class,
                 \App\Filament\Admin\Resources\SupplierResource::class,
-                
             ])
             ->authMiddleware([
                 Authenticate::class,

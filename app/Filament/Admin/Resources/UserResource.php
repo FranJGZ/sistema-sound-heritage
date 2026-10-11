@@ -6,12 +6,14 @@ use App\Filament\Admin\Resources\UserResource\Pages;
 use App\Models\User;
 use Filament\Forms;
 use Filament\Forms\Form;
+use Filament\Notifications\Notification;
 use Filament\Resources\Resource;
 use Filament\Support\Enums\FontWeight;
 use Filament\Tables;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\SoftDeletingScope;
+use Illuminate\Support\Facades\Password;
 
 class UserResource extends Resource
 {
@@ -59,9 +61,9 @@ class UserResource extends Resource
                     ])
                     ->columns(2),
 
-                Forms\Components\Section::make('Permisos y Seguridad')
-                    ->description('Modificá los roles de acceso al sistema o blanqueá la contraseña en caso de extravío.')
-                    ->icon('heroicon-m-key')
+                Forms\Components\Section::make('Permisos de Acceso y Roles')
+                    ->description('Modificá los roles de acceso al sistema para este usuario. Para cambiar la contraseña, utilizá el envío de enlace de restablecimiento por correo.')
+                    ->icon('heroicon-m-shield-check')
                     ->schema([
                         Forms\Components\Select::make('roles')
                             ->label('Roles Asignados')
@@ -69,17 +71,9 @@ class UserResource extends Resource
                             ->multiple()
                             ->preload()
                             ->searchable()
-                            ->required(),
-
-                        Forms\Components\TextInput::make('password')
-                            ->label('Nueva Contraseña (Opcional)')
-                            ->password()
-                            ->revealable()
-                            ->placeholder('Dejar vacío para mantener la actual')
-                            ->dehydrated(fn ($state) => filled($state))
-                            ->required(false),
-                    ])
-                    ->columns(2),
+                            ->required()
+                            ->columnSpanFull(),
+                    ]),
             ]);
     }
 
@@ -87,13 +81,6 @@ class UserResource extends Resource
     {
         return $table
             ->columns([
-                Tables\Columns\TextColumn::make('id')
-                    ->label('ID')
-                    ->formatStateUsing(fn ($state): string => '#' . str_pad($state, 4, '0', STR_PAD_LEFT))
-                    ->weight(FontWeight::SemiBold)
-                    ->color('gray')
-                    ->sortable(),
-
                 Tables\Columns\TextColumn::make('name')
                     ->label('Usuario')
                     ->weight(FontWeight::Bold)
@@ -153,7 +140,33 @@ class UserResource extends Resource
             ])
             ->actions([
                 Tables\Actions\EditAction::make()
-                    ->label('Roles / Clave')
+                    ->label('Roles')
+                    ->hidden(fn (User $record): bool => $record->trashed()),
+
+                Tables\Actions\Action::make('enviar_reset')
+                    ->label('Resetear Clave')
+                    ->icon('heroicon-o-envelope')
+                    ->color('warning')
+                    ->requiresConfirmation()
+                    ->modalHeading('Enviar Enlace de Recuperación de Contraseña')
+                    ->modalDescription(fn (User $record) => "¿Confirmás enviar un correo a {$record->email} con el enlace para que el usuario restablezca su propia contraseña?")
+                    ->action(function (User $record) {
+                        $status = Password::sendResetLink(['email' => $record->email]);
+
+                        if ($status === Password::RESET_LINK_SENT) {
+                            Notification::make()
+                                ->title('Correo de recuperación enviado')
+                                ->body("Se envió el enlace de restablecimiento a {$record->email}.")
+                                ->success()
+                                ->send();
+                        } else {
+                            Notification::make()
+                                ->title('No se pudo enviar el correo')
+                                ->body(__($status))
+                                ->danger()
+                                ->send();
+                        }
+                    })
                     ->hidden(fn (User $record): bool => $record->trashed()),
 
                 Tables\Actions\DeleteAction::make()

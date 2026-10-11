@@ -12,10 +12,10 @@ return new class extends Migration {
             $table->string('first_name'); 
             $table->string('address'); 
             $table->string('phone'); 
-            $table->string('tax_id'); 
-            $table->string('tax_condition'); 
-            $table->string('email'); 
+            $table->string('tax_id')->nullable(); 
+            $table->string('email')->nullable(); 
             $table->foreignId('city_id')->constrained('cities'); 
+
             $table->softDeletes();
             $table->timestamps();
         });

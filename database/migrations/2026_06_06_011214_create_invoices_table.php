@@ -13,7 +13,8 @@ return new class extends Migration {
             $table->date('due_date'); 
             $table->decimal('total', 10, 2); 
             $table->foreignId('store_id')->constrained('stores'); 
-            $table->foreignId('customer_id')->constrained('customers'); 
+            $table->foreignId('customer_id')->nullable()->constrained('customers');
+            $table->string('tax_condition')->default('Consumidor Final'); 
             $table->foreignId('employee_id')->constrained('employees'); 
             $table->softDeletes();
             $table->timestamps();

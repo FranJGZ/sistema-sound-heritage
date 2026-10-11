@@ -32,8 +32,10 @@ class RegisteredUserController extends Controller
     {
         $request->validate([
             'name' => ['required', 'string', 'max:255'],
-            'email' => ['required', 'string', 'lowercase', 'email', 'max:255', 'unique:'.User::class],
+            'email' => ['required', 'string', 'lowercase', 'email:rfc,dns', 'max:255', 'unique:'.User::class],
             'password' => ['required', 'confirmed', Rules\Password::defaults()],
+            'document_number' => ['nullable', 'string', 'max:20', 'unique:customers,document_number'],
+            'phone' => ['nullable', 'string', 'max:50'],
         ]);
 
         $user = User::create([
@@ -43,10 +45,16 @@ class RegisteredUserController extends Controller
         ]);
         $user->assignRole('Cliente');
 
+        // Sincroniza y crea inmediatamente la ficha de cliente asociada
+        $user->syncProfileFromRoles([
+            'document_number' => $request->document_number,
+            'phone'           => $request->phone,
+        ]);
+
         event(new Registered($user));
 
         Auth::login($user);
 
-        return redirect('/');
+        return redirect()->route('verification.notice');
     }
 }

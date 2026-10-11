@@ -6,6 +6,7 @@ use Filament\Http\Middleware\Authenticate;
 use Filament\Http\Middleware\AuthenticateSession;
 use Filament\Http\Middleware\DisableBladeIconComponents;
 use Filament\Http\Middleware\DispatchServingFilamentEvent;
+use Filament\Navigation\MenuItem;
 use Filament\Panel;
 use Filament\PanelProvider;
 use Filament\Support\Colors\Color;
@@ -18,9 +19,24 @@ use Illuminate\Session\Middleware\StartSession;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\HtmlString;
 use Illuminate\View\Middleware\ShareErrorsFromSession;
+use Filament\Actions\Action;
+
 
 class AdminPanelProvider extends PanelProvider
 {
+    
+    protected function getHeaderActions(): array
+    {
+        return [
+            Action::make('imprimir_dashboard')
+                ->label('Exportar Reporte Gráfico (PDF)')
+                ->icon('heroicon-o-printer')
+                ->color('primary')
+                ->extraAttributes([
+                    'onclick' => 'window.print()',
+                ]),
+        ];
+    }
     public function boot(): void
     {
         Gate::before(function ($user, $ability) {
@@ -57,6 +73,12 @@ class AdminPanelProvider extends PanelProvider
                 'Eventos y Sala',
                 'Administración y RRHH',
             ])
+            ->userMenuItems([
+                MenuItem::make()
+                    ->label('Volver a la Tienda')
+                    ->url('/')
+                    ->icon('heroicon-o-building-storefront'),
+            ])
             ->renderHook(
                 PanelsRenderHook::USER_MENU_BEFORE,
                 fn (): \Illuminate\Contracts\View\View => view('filament.theme-toggle')
@@ -68,7 +90,7 @@ class AdminPanelProvider extends PanelProvider
             ->discoverResources(in: app_path('Filament/Admin/Resources'), for: 'App\\Filament\\Admin\\Resources')
             ->discoverPages(in: app_path('Filament/Admin/Pages'), for: 'App\\Filament\\Admin\\Pages')
             ->pages([
-                \Filament\Pages\Dashboard::class,
+                \App\Filament\Admin\Pages\Dashboard::class,
             ])
             ->widgets([
                 \App\Filament\Admin\Widgets\TiendaStatsOverview::class,

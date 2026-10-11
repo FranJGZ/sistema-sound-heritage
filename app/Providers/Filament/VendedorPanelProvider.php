@@ -2,6 +2,7 @@
 
 namespace App\Providers\Filament;
 
+use App\Models\Attendance;
 use App\Models\Customer;
 use App\Models\Event;
 use App\Models\Invoice;
@@ -11,6 +12,7 @@ use Filament\Http\Middleware\Authenticate;
 use Filament\Http\Middleware\AuthenticateSession;
 use Filament\Http\Middleware\DisableBladeIconComponents;
 use Filament\Http\Middleware\DispatchServingFilamentEvent;
+use Filament\Navigation\MenuItem;
 use Filament\Pages;
 use Filament\Panel;
 use Filament\PanelProvider;
@@ -48,6 +50,11 @@ class VendedorPanelProvider extends PanelProvider
                     return in_array($ability, ['viewAny', 'view', 'create', 'update'], true);
                 }
 
+                // Inscripciones a Eventos: puede listar, ver, crear y cancelar inscripciones
+                if ($modelClass === Attendance::class) {
+                    return in_array($ability, ['viewAny', 'view', 'create', 'delete'], true);
+                }
+
                 // Catálogo de Productos y Cartelera de Eventos: solo lectura para consulta de stock y precios
                 if (in_array($modelClass, [Product::class, Event::class], true)) {
                     return in_array($ability, ['viewAny', 'view'], true);
@@ -70,6 +77,7 @@ class VendedorPanelProvider extends PanelProvider
             ->path('vendedor')
             ->brandName('Sound Heritage - Ventas')
             ->brandLogo(asset('img/Logo_SH.png'))
+            ->darkModeBrandLogo(asset('img/Logo_blanco_sh.png'))
             ->brandLogoHeight('3.2rem')
             ->font('Figtree')
             ->colors([
@@ -84,6 +92,12 @@ class VendedorPanelProvider extends PanelProvider
             ->navigationGroups([
                 'Tienda',
                 'Eventos y Sala',
+            ])
+            ->userMenuItems([
+                MenuItem::make()
+                    ->label('Volver a la Tienda')
+                    ->url('/')
+                    ->icon('heroicon-o-building-storefront'),
             ])
             ->renderHook(
                 PanelsRenderHook::USER_MENU_BEFORE,
@@ -102,6 +116,7 @@ class VendedorPanelProvider extends PanelProvider
                 \App\Filament\Admin\Resources\ProductResource::class,
                 \App\Filament\Admin\Resources\ReservationResource::class,
                 \App\Filament\Admin\Resources\EventResource::class,
+                \App\Filament\Admin\Resources\AttendanceResource::class,
             ])
             ->widgets([
                 \App\Filament\Admin\Widgets\TiendaStatsOverview::class,

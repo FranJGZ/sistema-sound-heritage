@@ -11,17 +11,22 @@ use App\Models\Product;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Filament\Forms;
 use Filament\Forms\Form;
+use Filament\Infolists;
+use Filament\Infolists\Infolist;
 use Filament\Resources\Resource;
-use Filament\Support\Enums\FontWeight;
 use Filament\Support\Enums\MaxWidth;
 use Filament\Tables;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\SoftDeletingScope;
-use Illuminate\Support\Facades\Cache;
 
 class InvoiceResource extends Resource
 {
+
+    // =========================================================================
+    // 1. CONFIGURACIÓN DEL MENÚ Y MODELO
+    // Se agrupa en 'Tienda' con orden 2 para que quede justo debajo de Productos.
+    // =========================================================================
     protected static ?string $model = Invoice::class;
     protected static ?string $navigationGroup = 'Tienda';
     protected static ?int $navigationSort = 2;
@@ -30,316 +35,407 @@ class InvoiceResource extends Resource
     protected static ?string $modelLabel = 'Venta / Factura';
     protected static ?string $pluralModelLabel = 'Facturas y Ventas';
 
+    // =========================================================================
+    // 2. FUNCIONES AUXILIARES (CÁLCULO EN VIVO Y TICKET PDF)
+    // =========================================================================
+
+    // Se usa '$get("invoiceDetails")' y '$get("../../invoiceDetails")' porque puede dispararse desde el Repeater padre o desde un input hijo
     public static function calculateTotal(Forms\Get $get, Forms\Set $set): void
     {
         $items = $get('invoiceDetails') ?? $get('../../invoiceDetails') ?? [];
         $total = 0;
 
         foreach ($items as $item) {
-            $qty = (float) ($item['quantity'] ?? 0);
-            $price = (float) ($item['unit_price'] ?? 0);
-            $total += ($qty * $price);
+            $quantity = (float) ($item['quantity'] ?? 0);
+            $price    = (float) ($item['unit_price'] ?? 0);
+            $total   += $quantity * $price;
         }
 
-        $formatted = number_format($total, 2, '.', '');
-        $set('total', $formatted);
-        $set('../../total', $formatted);
+        $formattedTotal = number_format($total, 2, '.', '');
+        $set('total', $formattedTotal);
+        $set('../../total', $formattedTotal);
     }
 
-    public static function nextReceiptNumber(): string
-    {
-        $maxNumber = (int) Invoice::withTrashed()->max('receipt_number');
-        $countNumber = Invoice::withTrashed()->count();
-        $next = max($maxNumber, $countNumber) + 1;
-
-        return str_pad((string) $next, 8, '0', STR_PAD_LEFT);
-    }
-
+    // El alto ($height) se calcula según la cantidad de renglones para simular un rollo térmico de 80mm (226.77pt) sin cortar páginas
     public static function downloadTicketPdf(Invoice $invoice)
     {
-        $invoice->loadMissing([
-            'store',
-            'customer',
-            'employee',
-            'invoiceDetails.product',
-            'paymentDetails.paymentMethod',
-        ]);
-
-        // Alto dinámico según cantidad de renglones para formato ticket térmico 80mm (226.77pt)
         $itemCount = max(1, $invoice->invoiceDetails->count());
-        $heightPt = 430 + ($itemCount * 38);
+        $height    = 430 + ($itemCount * 38);
 
         $pdf = Pdf::loadView('reports.invoice-ticket-pdf', [
             'invoice' => $invoice,
-        ])->setPaper([0, 0, 226.77, $heightPt], 'portrait');
+        ])->setPaper([0, 0, 226.77, $height], 'portrait');
 
         $filename = "ticket-FC-{$invoice->invoice_type}-{$invoice->point_of_sale}-{$invoice->receipt_number}.pdf";
 
-        return response()->streamDownload(
-            fn () => print($pdf->output()),
-            $filename
-        );
+        return response()->streamDownload(fn () => print($pdf->output()), $filename);
     }
 
+    // Se desactiva SoftDeletingScope para que las facturas anuladas no desaparezcan del historial contable y puedan auditarse
     public static function getEloquentQuery(): Builder
     {
-        return parent::getEloquentQuery()
-            ->with(['customer', 'employee', 'invoiceDetails.product', 'paymentDetails.paymentMethod'])
-            ->withoutGlobalScopes([
-                SoftDeletingScope::class,
-            ]);
+        return parent::getEloquentQuery()->withoutGlobalScopes([SoftDeletingScope::class]);
     }
 
+    // =========================================================================
+    // 3. FORMULARIO DE VENTA (ESTILO POS A 2 COLUMNAS)
+    // Se divide en 12 columnas (7 izquierda y 5 derecha) para ver productos y pago a la vez.
+    // =========================================================================
     public static function form(Form $form): Form
     {
-        return $form
-            ->schema([
-                Forms\Components\Grid::make(12)
+        return $form->schema([
+            Forms\Components\Grid::make(12)->schema([
+
+                // -----------------------------------------------------------------
+                // COLUMNA IZQUIERDA (7 de 12): PRODUCTOS A VENDER Y TOTAL
+                // -----------------------------------------------------------------
+                Forms\Components\Group::make()
+                    ->columnSpan(['default' => 12, 'lg' => 7])
                     ->schema([
-                        // =========================================================
-                        // COLUMNA IZQUIERDA (7/12): PRODUCTOS A VENDER Y TOTAL
-                        // =========================================================
-                        Forms\Components\Group::make()
-                            ->columnSpan(['default' => 12, 'lg' => 7])
+                        Forms\Components\Section::make('Detalle de Productos a Vender')
+                            ->description('Podés filtrar por categoría o buscar directamente el producto; el precio y el total se calculan solos.')
+                            ->icon('heroicon-m-shopping-bag')
                             ->schema([
-                                Forms\Components\Section::make('Detalle de Productos a Vender')
-                                    ->description('Seleccioná los productos a la izquierda; el precio y el total se calculan automáticamente.')
-                                    ->icon('heroicon-m-shopping-bag')
+                                // Usa relationship() para guardar automáticamente cada renglón en la tabla intermedia 'invoice_details'
+                                Forms\Components\Repeater::make('invoiceDetails')
+                                    ->relationship()
+                                    ->label('Productos de la Venta')
+                                    ->live()
+                                    ->afterStateUpdated(fn (Forms\Get $get, Forms\Set $set) => self::calculateTotal($get, $set))
+                                    // Necesario para que al quitar un renglón el total general no quede con el valor viejo
+                                    ->deleteAction(fn ($action) => $action->after(fn (Forms\Get $get, Forms\Set $set) => self::calculateTotal($get, $set)))
                                     ->schema([
-                                        Forms\Components\Repeater::make('invoiceDetails')
-                                            ->relationship()
-                                            ->label('Productos de la Venta')
+                                        // Filtro auxiliar en memoria (dehydrated: false) para acotar el catálogo por rubro sin guardarse en la BD
+                                        Forms\Components\Select::make('category_filter')
+                                            ->label('Categoría / Rubro')
+                                            ->options(ProductResource::getProductTypeOptions())
+                                            ->placeholder('Todas las categorías')
                                             ->live()
-                                            ->afterStateUpdated(fn (Forms\Get $get, Forms\Set $set) => self::calculateTotal($get, $set))
-                                            ->deleteAction(
-                                                fn (Forms\Components\Actions\Action $action) => $action->after(
-                                                    fn (Forms\Get $get, Forms\Set $set) => self::calculateTotal($get, $set)
-                                                )
+                                            ->dehydrated(false)
+                                            ->afterStateUpdated(fn (Forms\Set $set) => $set('product_id', null))
+                                            ->columnSpan(5),
+
+                                        Forms\Components\Select::make('product_id')
+                                            ->label('Producto')
+                                            // Ordena de la A a la Z, filtra por stock > 0 e incluye el ID ya elegido para que no muestre el número de ID cuando el stock queda en 0
+                                            ->relationship(
+                                                'product',
+                                                'name',
+                                                function (Builder $query, Forms\Get $get) {
+                                                    $selectedCategory = $get('category_filter');
+                                                    $selectedProduct  = $get('product_id');
+
+                                                    if ($selectedCategory) {
+                                                        $query->where('type', $selectedCategory);
+                                                    }
+
+                                                    return $query
+                                                        ->where(function (Builder $q) use ($selectedProduct) {
+                                                            $q->where('stock', '>', 0)
+                                                              ->orWhere('id', $selectedProduct);
+                                                        })
+                                                        ->orderBy('name');
+                                                }
                                             )
-                                            ->schema([
-                                                Forms\Components\Select::make('product_id')
-                                                    ->label('Producto')
-                                                    ->relationship('product', 'name', fn (Builder $query) => $query->where('stock', '>', 0))
-                                                    ->getOptionLabelFromRecordUsing(
-                                                        fn (Product $record) => "{$record->name} (Stock: {$record->stock}) — $" . number_format((float) $record->price, 2, ',', '.')
-                                                    )
-                                                    ->searchable(['name'])
-                                                    ->preload()
-                                                    ->required()
-                                                    ->disableOptionsWhenSelectedInSiblingRepeaterItems()
-                                                    ->live()
-                                                    ->afterStateUpdated(function ($state, Forms\Set $set, Forms\Get $get) {
-                                                        $product = Product::find($state);
-                                                        $unitPrice = (float) ($product?->price ?? 0);
-                                                        $qty = (float) ($get('quantity') ?? 1);
-                                                        $set('unit_price', number_format($unitPrice, 2, '.', ''));
-                                                        $set('subtotal', number_format($unitPrice * $qty, 2, '.', ''));
-                                                        self::calculateTotal($get, $set);
-                                                    })
-                                                    ->columnSpan(12),
+                                            ->getOptionLabelFromRecordUsing(fn (Product $record) => "{$record->name} (Stock: {$record->stock}) — $" . number_format($record->price, 2, ',', '.'))
+                                            ->searchable(['name'])
+                                            ->preload()
+                                            ->required()
+                                            // Impide cargar el mismo producto en dos renglones distintos y burlar el tope de stock por fila
+                                            ->disableOptionsWhenSelectedInSiblingRepeaterItems()
+                                            ->live()
+                                            // Al elegir el producto se copia su precio actual para congelar el valor histórico de la venta
+                                            ->afterStateUpdated(function ($state, Forms\Set $set, Forms\Get $get) {
+                                                $product  = Product::find($state);
+                                                $price    = (float) ($product->price ?? 0);
+                                                $quantity = (float) ($get('quantity') ?? 1);
 
-                                                Forms\Components\TextInput::make('quantity')
-                                                    ->label('Cantidad')
-                                                    ->numeric()
-                                                    ->default(1)
-                                                    ->minValue(1)
-                                                    ->maxValue(fn (Forms\Get $get): int => (int) (Product::find($get('product_id'))?->stock ?? 9999))
-                                                    ->validationMessages([
-                                                        'max' => 'Supera el stock disponible (:max u.).',
-                                                    ])
-                                                    ->required()
-                                                    ->live(onBlur: true)
-                                                    ->afterStateUpdated(function ($state, Forms\Set $set, Forms\Get $get) {
-                                                        $qty = max(1, (float) ($state ?? 1));
-                                                        $unitPrice = (float) ($get('unit_price') ?? 0);
-                                                        $set('subtotal', number_format($qty * $unitPrice, 2, '.', ''));
-                                                        self::calculateTotal($get, $set);
-                                                    })
-                                                    ->columnSpan(4),
+                                                $set('unit_price', number_format($price, 2, '.', ''));
+                                                $set('subtotal', number_format($price * $quantity, 2, '.', ''));
+                                                self::calculateTotal($get, $set);
+                                            })
+                                            ->columnSpan(7),
 
-                                                Forms\Components\TextInput::make('unit_price')
-                                                    ->label('Precio Unitario ($)')
-                                                    ->numeric()
-                                                    ->prefix('$')
-                                                    ->readOnly()
-                                                    ->dehydrated()
-                                                    ->required()
-                                                    ->columnSpan(4),
+                                        Forms\Components\TextInput::make('quantity')
+                                            ->label('Cantidad')
+                                            ->numeric()
+                                            ->default(1)
+                                            ->minValue(1)
+                                            // Bloquea la carga si el vendedor intenta vender más unidades de las que hay en depósito
+                                            ->maxValue(fn (Forms\Get $get) => Product::find($get('product_id'))?->stock ?? 9999)
+                                            ->validationMessages(['max' => 'Supera el stock disponible (:max u.).'])
+                                            ->required()
+                                            ->live(onBlur: true)
+                                            ->afterStateUpdated(function ($state, Forms\Set $set, Forms\Get $get) {
+                                                $quantity = max(1, (float) ($state ?? 1));
+                                                $price    = (float) ($get('unit_price') ?? 0);
 
-                                                Forms\Components\TextInput::make('subtotal')
-                                                    ->label('Subtotal ($)')
-                                                    ->numeric()
-                                                    ->prefix('$')
-                                                    ->readOnly()
-                                                    ->dehydrated()
-                                                    ->required()
-                                                    ->columnSpan(4),
-                                            ])
-                                            ->columns(12)
-                                            ->defaultItems(1)
-                                            ->addActionLabel('+ Agregar otro producto'),
+                                                $set('subtotal', number_format($quantity * $price, 2, '.', ''));
+                                                self::calculateTotal($get, $set);
+                                            })
+                                            ->columnSpan(4),
 
-                                        Forms\Components\TextInput::make('total')
-                                            ->label('TOTAL A COBRAR ($)')
+                                        // readOnly + dehydrated: impide alterar precios a mano, pero obliga a Filament a enviar el valor a la BD
+                                        Forms\Components\TextInput::make('unit_price')
+                                            ->label('Precio Unitario ($)')
                                             ->numeric()
                                             ->prefix('$')
                                             ->readOnly()
                                             ->dehydrated()
-                                            ->default('0.00')
-                                            ->extraInputAttributes([
-                                                'class' => 'text-xl font-bold',
-                                            ]),
-                                    ]),
-                            ]),
-
-                        // =========================================================
-                        // COLUMNA DERECHA (5/12): CABECERA FISCAL Y MEDIO DE PAGO
-                        // =========================================================
-                        Forms\Components\Group::make()
-                            ->columnSpan(['default' => 12, 'lg' => 5])
-                            ->schema([
-                                Forms\Components\Section::make('Cabecera del Comprobante Fiscal')
-                                    ->icon('heroicon-m-document-text')
-                                    ->schema([
-                                        Forms\Components\Select::make('customer_id')
-                                            ->label('Cliente')
-                                            ->relationship('customer', 'last_name')
-                                            ->getOptionLabelFromRecordUsing(
-                                                fn ($record) => "{$record->last_name}, {$record->first_name} ({$record->tax_condition})"
-                                            )
-                                            ->searchable(['first_name', 'last_name', 'document_number', 'tax_id'])
-                                            ->preload()
                                             ->required()
-                                            ->live()
-                                            ->afterStateUpdated(function ($state, Forms\Set $set) {
-                                                $customer = Customer::find($state);
-                                                if ($customer) {
-                                                    $set('invoice_type', $customer->tax_condition === 'Responsable Inscripto' ? 'A' : 'B');
-                                                }
-                                            })
-                                            ->createOptionForm([
-                                                Forms\Components\TextInput::make('first_name')
-                                                    ->label('Nombre')
-                                                    ->required(),
-                                                Forms\Components\TextInput::make('last_name')
-                                                    ->label('Apellido')
-                                                    ->required(),
-                                                Forms\Components\TextInput::make('document_number')
-                                                    ->label('DNI')
-                                                    ->required()
-                                                    ->unique('customers', 'document_number'),
-                                                Forms\Components\TextInput::make('tax_id')
-                                                    ->label('CUIT / CUIL (Opcional)'),
-                                                Forms\Components\Select::make('tax_condition')
-                                                    ->label('Condición frente al IVA')
-                                                    ->options([
-                                                        'Consumidor Final'      => 'Consumidor Final',
-                                                        'Monotributista'        => 'Monotributista',
-                                                        'Responsable Inscripto' => 'Responsable Inscripto',
-                                                        'Exento'                => 'Exento',
-                                                    ])
-                                                    ->default('Consumidor Final')
-                                                    ->required(),
-                                                Forms\Components\TextInput::make('email')
-                                                    ->label('Correo Electrónico')
-                                                    ->email()
-                                                    ->required()
-                                                    ->unique('customers', 'email'),
-                                            ])
-                                            ->columnSpanFull(),
+                                            ->columnSpan(4),
 
-                                        Forms\Components\Select::make('employee_id')
-                                            ->label('Vendedor / Cajero')
-                                            ->relationship('employee', 'last_name')
-                                            ->getOptionLabelFromRecordUsing(fn ($record) => "{$record->last_name}, {$record->first_name}")
-                                            ->searchable(['first_name', 'last_name'])
-                                            ->preload()
-                                            ->default(fn () => Employee::where('user_id', auth()->id())->value('id') ?? Employee::query()->value('id'))
+                                        Forms\Components\TextInput::make('subtotal')
+                                            ->label('Subtotal ($)')
+                                            ->numeric()
+                                            ->prefix('$')
+                                            ->readOnly()
+                                            ->dehydrated()
                                             ->required()
-                                            ->columnSpanFull(),
-
-                                        Forms\Components\Select::make('invoice_type')
-                                            ->label('Tipo de Factura')
-                                            ->options([
-                                                'A' => 'Factura A (Resp. Inscripto)',
-                                                'B' => 'Factura B (Cons. Final / Monotrib.)',
-                                                'C' => 'Factura C',
-                                            ])
-                                            ->default('B')
-                                            ->disabled()
-                                            ->dehydrated()
-                                            ->required(),
-
-                                        Forms\Components\Select::make('store_id')
-                                            ->label('Sucursal')
-                                            ->relationship('store', 'company_name')
-                                            ->default(1)
-                                            ->disabled()
-                                            ->dehydrated()
-                                            ->required(),
-
-                                        Forms\Components\TextInput::make('point_of_sale')
-                                            ->label('Punto de Venta')
-                                            ->default('0001')
-                                            ->readOnly()
-                                            ->dehydrated()
-                                            ->required(),
-
-                                        Forms\Components\TextInput::make('receipt_number')
-                                            ->label('N° de Comprobante')
-                                            ->default(fn () => self::nextReceiptNumber())
-                                            ->readOnly()
-                                            ->dehydrated()
-                                            ->required(),
-
-                                        Forms\Components\DatePicker::make('issue_date')
-                                            ->label('Fecha de Emisión')
-                                            ->default(now())
-                                            ->readOnly()
-                                            ->dehydrated()
-                                            ->required(),
-
-                                        Forms\Components\DatePicker::make('due_date')
-                                            ->label('Fecha de Vencimiento')
-                                            ->default(now()->addDays(10))
-                                            ->readOnly()
-                                            ->dehydrated()
-                                            ->required(),
+                                            ->columnSpan(4),
                                     ])
-                                    ->columns(2),
+                                    ->columns(12)
+                                    ->defaultItems(1)
+                                    ->addActionLabel('+ Agregar otro producto'),
 
-                                Forms\Components\Section::make('Medio de Pago')
-                                    ->icon('heroicon-m-credit-card')
-                                    ->schema([
-                                        Forms\Components\Repeater::make('paymentDetails')
-                                            ->relationship()
-                                            ->label('Pagos Registrados')
-                                            ->schema([
-                                                Forms\Components\Select::make('payment_method_id')
-                                                    ->label('Método de Pago')
-                                                    ->relationship('paymentMethod', 'name')
-                                                    ->default(fn () => PaymentMethod::query()->value('id'))
-                                                    ->preload()
-                                                    ->required(),
-                                            ])
-                                            ->defaultItems(1)
-                                            ->addActionLabel('+ Agregar otro medio de pago'),
-                                    ]),
+                                Forms\Components\TextInput::make('total')
+                                    ->label('TOTAL A COBRAR ($)')
+                                    ->numeric()
+                                    ->prefix('$')
+                                    ->readOnly()
+                                    ->dehydrated()
+                                    ->default('0.00')
+                                    ->extraInputAttributes(['class' => 'text-xl font-bold']),
                             ]),
                     ]),
-            ]);
+
+                // -----------------------------------------------------------------
+                // COLUMNA DERECHA (5 de 12): CLIENTE, DATOS FISCALES Y PAGO
+                // -----------------------------------------------------------------
+                Forms\Components\Group::make()
+                    ->columnSpan(['default' => 12, 'lg' => 5])
+                    ->schema([
+                        Forms\Components\Section::make('Cabecera del Comprobante Fiscal')
+                            ->icon('heroicon-m-document-text')
+                            ->schema([
+                        Forms\Components\Select::make('customer_id')
+                            ->label('Cliente')
+                            ->relationship(
+                                'customer',
+                                'last_name',
+                                // Esto hace que el cliente de mostrador (DNI 0) aparezca SIEMPRE PRIMERO arriba de todo en el desplegable
+                                modifyQueryUsing: fn (Builder $query) => $query->orderByRaw("CASE WHEN document_number = '0' THEN 0 ELSE 1 END")->orderBy('last_name')
+                            )
+                            ->getOptionLabelFromRecordUsing(fn ($record) => $record->document_number === '0' 
+                                ? "★ {$record->last_name} ({$record->first_name})" 
+                                : "{$record->last_name}, {$record->first_name} (DNI: {$record->document_number})")
+                            ->searchable(['first_name', 'last_name', 'document_number', 'tax_id'])
+                            ->preload()
+                            ->required()
+                            // Viene seleccionado por defecto en toda nueva venta
+                            ->default(fn () => Customer::where('document_number', '0')->value('id'))
+                            ->live()
+                            ->afterStateUpdated(function ($state, Forms\Set $set) {
+                                $customer = Customer::find($state);
+                                if ($customer) {
+                                    $type = ($customer->tax_condition === 'Responsable Inscripto') ? 'A' : 'B';
+                                    $set('invoice_type', $type);
+                                }
+                            })
+                            ->createOptionForm(CustomerResource::getQuickCreateFormSchema())
+                            ->createOptionAction(
+                                fn (Forms\Components\Actions\Action $action) => $action
+                                    ->modalHeading('Registrar Nuevo Cliente')
+                                    ->modalWidth('3xl')
+                            )
+                            ->columnSpanFull(),
+
+                                Forms\Components\Select::make('employee_id')
+                                    ->label('Vendedor / Cajero')
+                                    ->relationship('employee', 'last_name')
+                                    ->getOptionLabelFromRecordUsing(fn ($record) => "{$record->last_name}, {$record->first_name}")
+                                    ->searchable(['first_name', 'last_name'])
+                                    ->preload()
+                                    // Asocia por defecto al empleado vinculado al usuario en sesión para agilizar la atención
+                                    ->default(fn () => Employee::where('user_id', auth()->id())->value('id') ?? Employee::first()?->id)
+                                    ->required()
+                                    ->columnSpanFull(),
+
+                                // disabled + dehydrated: en HTML los campos disabled no se envían en el POST; dehydrated() fuerza su guardado
+                                Forms\Components\Select::make('invoice_type')
+                                    ->label('Tipo de Factura')
+                                    ->options([
+                                        'A' => 'Factura A (Resp. Inscripto)',
+                                        'B' => 'Factura B (Cons. Final / Monotrib.)',
+                                        'C' => 'Factura C',
+                                    ])
+                                    ->default('B')
+                                    ->disabled()
+                                    ->dehydrated()
+                                    ->required(),
+
+                                Forms\Components\Select::make('store_id')
+                                    ->label('Sucursal')
+                                    ->relationship('store', 'company_name')
+                                    ->default(1)
+                                    ->disabled()
+                                    ->dehydrated()
+                                    ->required(),
+
+                                Forms\Components\TextInput::make('point_of_sale')
+                                    ->label('Punto de Venta')
+                                    ->default('0001')
+                                    ->readOnly()
+                                    ->dehydrated()
+                                    ->required(),
+
+                                // Se cuenta con withTrashed() porque la numeración fiscal es correlativa y no puede reutilizar números anulados
+                                Forms\Components\TextInput::make('receipt_number')
+                                    ->label('N° de Comprobante')
+                                    ->default(fn () => str_pad((string) (Invoice::withTrashed()->count() + 1), 8, '0', STR_PAD_LEFT))
+                                    ->readOnly()
+                                    ->dehydrated()
+                                    ->required(),
+
+                                Forms\Components\DatePicker::make('issue_date')
+                                    ->label('Fecha de Emisión')
+                                    ->default(now())
+                                    ->readOnly()
+                                    ->dehydrated()
+                                    ->required(),
+
+                                Forms\Components\DatePicker::make('due_date')
+                                    ->label('Fecha de Vencimiento')
+                                    ->default(now()->addDays(10))
+                                    ->readOnly()
+                                    ->dehydrated()
+                                    ->required(),
+                            ])
+                            ->columns(2),
+
+                        // Se usa Repeater en lugar de un Select simple para soportar pagos mixtos (ej. Efectivo + Transferencia)
+                        Forms\Components\Section::make('Medio de Pago')
+                            ->icon('heroicon-m-credit-card')
+                            ->schema([
+                                Forms\Components\Repeater::make('paymentDetails')
+                                    ->relationship()
+                                    ->label('Pagos Registrados')
+                                    ->schema([
+                                        Forms\Components\Select::make('payment_method_id')
+                                            ->label('Método de Pago')
+                                            ->relationship('paymentMethod', 'name')
+                                            ->default(fn () => PaymentMethod::first()?->id)
+                                            ->preload()
+                                            ->required(),
+                                    ])
+                                    ->defaultItems(1)
+                                    ->addActionLabel('+ Agregar otro medio de pago'),
+                            ]),
+                    ]),
+            ]),
+        ]);
     }
 
+       // =========================================================================
+    // 4. VISTA DE REPORTE DEL COMPROBANTE A PANTALLA COMPLETA (INFOLIST)
+    // =========================================================================
+    public static function infolist(Infolist $infolist): Infolist
+    {
+        return $infolist->schema([
+            Infolists\Components\Section::make('Resumen del Comprobante Fiscal')
+                ->icon('heroicon-m-document-text')
+                ->schema([
+                    Infolists\Components\TextEntry::make('receipt_number')
+                        ->label('N° de Comprobante')
+                        ->formatStateUsing(fn (Invoice $record) => "FC {$record->invoice_type} {$record->point_of_sale}-{$record->receipt_number}")
+                        ->badge()
+                        ->color('primary'),
+
+                    Infolists\Components\TextEntry::make('issue_date')
+                        ->label('Fecha de Emisión')
+                        ->date('d/m/Y'),
+
+                    Infolists\Components\TextEntry::make('estado')
+                        ->label('Estado Contable')
+                        ->state(fn (Invoice $record) => $record->trashed() ? 'Anulada' : 'Emitida')
+                        ->badge()
+                        ->color(fn (string $state) => $state === 'Emitida' ? 'success' : 'danger'),
+
+                    Infolists\Components\TextEntry::make('total')
+                        ->label('Total Facturado')
+                        ->money('ARS')
+                        ->weight('bold'),
+
+                    Infolists\Components\TextEntry::make('customer.last_name')
+                        ->label('Cliente')
+                        ->formatStateUsing(fn (Invoice $record) => "{$record->customer->last_name}, {$record->customer->first_name} (DNI: {$record->customer->document_number})"),
+
+                    Infolists\Components\TextEntry::make('customer.tax_condition')
+                        ->label('Condición frente al IVA')
+                        ->badge()
+                        ->color('gray'),
+
+                    Infolists\Components\TextEntry::make('employee.last_name')
+                        ->label('Vendedor / Cajero')
+                        ->formatStateUsing(fn (Invoice $record) => "{$record->employee->last_name}, {$record->employee->first_name}"),
+
+                    Infolists\Components\TextEntry::make('paymentDetails.paymentMethod.name')
+                        ->label('Medio de Pago')
+                        ->badge()
+                        ->color('info'),
+                ])->columns(4),
+
+            Infolists\Components\Section::make('Detalle de Productos Vendidos')
+                ->icon('heroicon-m-shopping-bag')
+                ->schema([
+                    // Se usa hiddenLabel() en los hijos para que cada artículo ocupe 1 sola línea compacta aunque haya 50 productos
+                    Infolists\Components\RepeatableEntry::make('invoiceDetails')
+                        ->label('')
+                        ->schema([
+                            Infolists\Components\TextEntry::make('product.name')
+                                ->hiddenLabel()
+                                ->weight('bold')
+                                ->columnSpan(6),
+
+                            Infolists\Components\TextEntry::make('quantity')
+                                ->hiddenLabel()
+                                ->prefix('Cant: ')
+                                ->suffix(' u.')
+                                ->columnSpan(2),
+
+                            Infolists\Components\TextEntry::make('unit_price')
+                                ->hiddenLabel()
+                                ->prefix('Unit: ')
+                                ->money('ARS')
+                                ->columnSpan(2),
+
+                            Infolists\Components\TextEntry::make('subtotal')
+                                ->hiddenLabel()
+                                ->prefix('Subtotal: ')
+                                ->money('ARS')
+                                ->weight('bold')
+                                ->columnSpan(2),
+                        ])
+                        ->columns(12),
+                ]),
+        ]);
+    }
+
+    // =========================================================================
+    // 5. TABLA PRINCIPAL DE COMPROBANTES EMITIDOS
+    // =========================================================================
     public static function table(Table $table): Table
     {
         return $table
+            // -----------------------------------------------------------------
+            // A) COLUMNAS VISIBLES EN EL LISTADO
+            // -----------------------------------------------------------------
             ->columns([
-                Tables\Columns\TextColumn::make('comprobante')
+                Tables\Columns\TextColumn::make('receipt_number')
                     ->label('Comprobante')
-                    ->getStateUsing(fn (Invoice $record): string => "FC {$record->invoice_type} {$record->point_of_sale}-{$record->receipt_number}")
-                    ->weight(FontWeight::Bold)
-                    ->searchable(['receipt_number'])
-                    ->sortable(['receipt_number']),
+                    ->formatStateUsing(fn (Invoice $record) => "FC {$record->invoice_type} {$record->point_of_sale}-{$record->receipt_number}")
+                    ->searchable()
+                    ->sortable(),
 
                 Tables\Columns\TextColumn::make('issue_date')
                     ->label('Fecha')
@@ -348,12 +444,12 @@ class InvoiceResource extends Resource
 
                 Tables\Columns\TextColumn::make('customer.last_name')
                     ->label('Cliente')
-                    ->formatStateUsing(fn (Invoice $record): string => $record->customer ? "{$record->customer->last_name}, {$record->customer->first_name}" : '-')
+                    ->formatStateUsing(fn (Invoice $record) => "{$record->customer->last_name}, {$record->customer->first_name}")
                     ->searchable(['first_name', 'last_name']),
 
                 Tables\Columns\TextColumn::make('employee.last_name')
                     ->label('Vendedor')
-                    ->formatStateUsing(fn (Invoice $record): string => $record->employee ? "{$record->employee->last_name}, {$record->employee->first_name}" : '-'),
+                    ->formatStateUsing(fn (Invoice $record) => "{$record->employee->last_name}, {$record->employee->first_name}"),
 
                 Tables\Columns\TextColumn::make('paymentDetails.paymentMethod.name')
                     ->label('Medio de Pago')
@@ -363,17 +459,23 @@ class InvoiceResource extends Resource
                 Tables\Columns\TextColumn::make('total')
                     ->label('Total ($)')
                     ->money('ARS')
-                    ->weight(FontWeight::Bold)
                     ->sortable(),
 
-                Tables\Columns\TextColumn::make('estado')
+                // Evalúa trashed() (deleted_at) para distinguir visualmente comprobantes válidos de anulados
+                Tables\Columns\TextColumn::make('deleted_at')
                     ->label('Estado')
                     ->badge()
-                    ->getStateUsing(fn (Invoice $record): string => $record->trashed() ? 'Anulada' : 'Emitida')
-                    ->color(fn (string $state): string => $state === 'Emitida' ? 'success' : 'danger'),
+                    ->getStateUsing(fn (Invoice $record) => $record->trashed() ? 'Anulada' : 'Emitida')
+                    ->color(fn (string $state) => $state === 'Emitida' ? 'success' : 'danger'),
             ])
             ->defaultSort('issue_date', 'desc')
+
+            // -----------------------------------------------------------------
+            // B) FILTROS DE AUDITORÍA Y BÚSQUEDA
+            // Estos mismos filtros afectan tanto a la tabla en pantalla como al exportar el PDF.
+            // -----------------------------------------------------------------
             ->filters([
+                // Por defecto muestra solo las activas para no mezclar ventas anuladas en la operatoria diaria
                 Tables\Filters\TrashedFilter::make()
                     ->label('Estado Contable')
                     ->placeholder('Solo Facturas Emitidas (Activas)')
@@ -402,76 +504,98 @@ class InvoiceResource extends Resource
                     ->searchable()
                     ->preload(),
 
-                Tables\Filters\SelectFilter::make('payment_method_id')
+                // Usa relación anidada con punto para filtrar facturas según la tabla intermedia payment_details
+                Tables\Filters\SelectFilter::make('payment_method')
                     ->label('Medio de Pago')
-                    ->options(fn (): array => PaymentMethod::query()->pluck('name', 'id')->toArray())
-                    ->query(function (Builder $query, array $data): Builder {
-                        return $query->when(
-                            filled($data['value'] ?? null),
-                            fn (Builder $q) => $q->whereHas('paymentDetails', fn (Builder $sq) => $sq->where('payment_method_id', $data['value']))
-                        );
-                    }),
+                    ->relationship('paymentDetails.paymentMethod', 'name'),
 
+                // Se usa Filter personalizado porque el rango requiere comparar '>=' y '<=' sobre la misma columna issue_date
                 Tables\Filters\Filter::make('issue_date')
                     ->form([
                         Forms\Components\DatePicker::make('desde')->label('Fecha Desde'),
                         Forms\Components\DatePicker::make('hasta')->label('Fecha Hasta'),
                     ])
                     ->columns(2)
-                    ->query(function (Builder $query, array $data): Builder {
-                        return $query
-                            ->when(filled($data['desde'] ?? null), fn (Builder $q) => $q->whereDate('issue_date', '>=', $data['desde']))
-                            ->when(filled($data['hasta'] ?? null), fn (Builder $q) => $q->whereDate('issue_date', '<=', $data['hasta']));
+                    ->query(function (Builder $query, array $data) {
+                        if ($data['desde']) {
+                            $query->whereDate('issue_date', '>=', $data['desde']);
+                        }
+                        if ($data['hasta']) {
+                            $query->whereDate('issue_date', '<=', $data['hasta']);
+                        }
                     }),
 
+                // Permite acotar ventas entre un monto mínimo y un monto máximo en pesos
                 Tables\Filters\Filter::make('rango_total')
                     ->form([
                         Forms\Components\TextInput::make('total_min')->label('Monto Mínimo ($)')->numeric()->prefix('$'),
                         Forms\Components\TextInput::make('total_max')->label('Monto Máximo ($)')->numeric()->prefix('$'),
                     ])
                     ->columns(2)
-                    ->query(function (Builder $query, array $data): Builder {
-                        return $query
-                            ->when(filled($data['total_min'] ?? null), fn (Builder $q) => $q->where('total', '>=', $data['total_min']))
-                            ->when(filled($data['total_max'] ?? null), fn (Builder $q) => $q->where('total', '<=', $data['total_max']));
+                    ->query(function (Builder $query, array $data) {
+                        if ($data['total_min']) {
+                            $query->where('total', '>=', $data['total_min']);
+                        }
+                        if ($data['total_max']) {
+                            $query->where('total', '<=', $data['total_max']);
+                        }
                     }),
             ])
             ->filtersFormColumns(3)
             ->filtersFormWidth(MaxWidth::FourExtraLarge)
+
+            // -----------------------------------------------------------------
+            // C) EXPORTACIÓN A PDF DEL LISTADO FILTRADO
+            // -----------------------------------------------------------------
             ->headerActions([
                 Tables\Actions\Action::make('exportar_pdf')
                     ->label('Exportar PDF')
                     ->icon('heroicon-m-document-arrow-down')
                     ->color('primary')
                     ->action(function ($livewire) {
-                        $records = $livewire->getFilteredSortedTableQuery()->get();
+                        // Se usa getFilteredSortedTableQuery() para que el PDF respete los filtros aplicados en pantalla
+                        $invoices       = $livewire->getFilteredSortedTableQuery()->get();
+                        // Se separan las emitidas para que el total recaudado no sume dinero de facturas anuladas
+                        $activeInvoices = $invoices->whereNull('deleted_at');
+
+                        $rows = [];
+                        foreach ($invoices as $invoice) {
+                            $paymentMethods = $invoice->paymentDetails->pluck('paymentMethod.name')->implode(', ');
+
+                            $rows[] = [
+                                $invoice->invoice_type . ' ' . $invoice->point_of_sale . '-' . $invoice->receipt_number,
+                                $invoice->issue_date,
+                                $invoice->customer->last_name . ' ' . $invoice->customer->first_name,
+                                $invoice->employee->last_name . ' ' . $invoice->employee->first_name,
+                                $paymentMethods,
+                                '$' . number_format($invoice->total, 2, ',', '.'),
+                                $invoice->deleted_at ? 'Anulada' : 'Emitida',
+                            ];
+                        }
 
                         $pdf = Pdf::loadView('reports.pdf-generic', [
-                            'title'   => 'Reporte Contable de Facturación y Ventas',
+                            'title'             => 'Reporte de Facturación y Ventas',
+                            'filtros_aplicados' => collect($livewire->getTable()->getFilterIndicators())
+                                ->map(fn ($indicator) => strip_tags((string) $indicator->getLabel()))
+                                ->implode(' | ') ?: 'Ninguno (Todos los registros)',
                             'summary' => [
-                                'Comprobantes Listados' => $records->count(),
-                                'Facturas Emitidas'     => $records->whereNull('deleted_at')->count(),
-                                'Facturas Anuladas'     => $records->whereNotNull('deleted_at')->count(),
-                                'Total Facturado Neto'  => '$' . number_format((float) $records->whereNull('deleted_at')->sum('total'), 2, ',', '.'),
+                                'Comprobantes'    => $invoices->count(),
+                                'Emitidas'        => $activeInvoices->count(),
+                                'Anuladas'        => $invoices->whereNotNull('deleted_at')->count(),
+                                'Total Facturado' => '$' . number_format($activeInvoices->sum('total'), 2, ',', '.'),
                             ],
                             'headers' => ['Comprobante', 'Fecha', 'Cliente', 'Vendedor', 'Medio de Pago', 'Total ($)', 'Estado'],
-                            'rows'    => $records->map(fn ($r) => [
-                                "FC {$r->invoice_type} {$r->point_of_sale}-{$r->receipt_number}",
-                                \Carbon\Carbon::parse($r->issue_date)->format('d/m/Y'),
-                                $r->customer ? "{$r->customer->last_name}, {$r->customer->first_name}" : '-',
-                                $r->employee ? "{$r->employee->last_name}, {$r->employee->first_name}" : '-',
-                                $r->paymentDetails->map(fn ($p) => $p->paymentMethod?->name)->filter()->implode(', ') ?: '-',
-                                '$' . number_format((float) $r->total, 2, ',', '.'),
-                                filled($r->deleted_at) ? 'Anulada' : 'Emitida',
-                            ])->toArray(),
+                            'rows'    => $rows,
                         ])->setPaper('a4', 'landscape');
 
-                        return response()->streamDownload(
-                            fn () => print($pdf->output()),
-                            'reporte-ventas-N' . str_pad((string) Cache::get('sh_pdf_report_seq', 1), 4, '0', STR_PAD_LEFT) . '-' . now()->format('Ymd-His') . '.pdf'
-                        );
+                        // Se usa streamDownload porque Livewire funciona por AJAX y no permite descargas directas tradicionales
+                        return response()->streamDownload(fn () => print($pdf->output()), 'reporte-ventas-' . date('Ymd-His') . '.pdf');
                     }),
             ])
+
+                        // -----------------------------------------------------------------
+            // D) ACCIONES POR CADA FILA (TICKET, VER EN MODAL Y ANULAR)
+            // -----------------------------------------------------------------
             ->actions([
                 Tables\Actions\Action::make('ticket_pdf')
                     ->label('Ticket')
@@ -479,28 +603,28 @@ class InvoiceResource extends Resource
                     ->color('success')
                     ->action(fn (Invoice $record) => self::downloadTicketPdf($record)),
 
-                Tables\Actions\ViewAction::make(),
+                Tables\Actions\ViewAction::make()
+                    ->modalHeading('Detalle del Comprobante Fiscal')
+                    ->modalWidth(MaxWidth::FourExtraLarge),
 
+                // Se usa DeleteAction como 'Anular' (baja lógica) y se oculta si ya fue anulada para no devolver stock dos veces
                 Tables\Actions\DeleteAction::make()
                     ->label('Anular')
                     ->modalHeading('Anular Factura (Irreversible)')
                     ->modalDescription('¿Estás seguro de anular esta factura? Se reintegrará el stock de los productos al depósito y el comprobante quedará registrado como ANULADO.')
                     ->hidden(fn (Invoice $record): bool => $record->trashed()),
-            ])
-            ->bulkActions([]);
+            ]);
     }
 
-    public static function getRelations(): array
-    {
-        return [];
-    }
-
+    // =========================================================================
+    // 6. RUTAS DE LAS PÁGINAS DEL RECURSO
+    // Sin la ruta 'view', Filament abre automáticamente el reporte infolist() en un modal igual que en Compras.
+    // =========================================================================
     public static function getPages(): array
     {
         return [
             'index'  => Pages\ListInvoices::route('/'),
             'create' => Pages\CreateInvoice::route('/create'),
-            'view'   => Pages\ViewInvoice::route('/{record}'),
         ];
     }
 }

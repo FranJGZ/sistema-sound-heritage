@@ -1,30 +1,27 @@
 <x-guest-layout>
-    <div class="mb-4 text-sm text-gray-600">
-        {{ __('Thanks for signing up! Before getting started, could you verify your email address by clicking on the link we just emailed to you? If you didn\'t receive the email, we will gladly send you another.') }}
-    </div>
+    <h2 class="text-2xl font-extrabold text-base-content mb-1">Verificar Correo</h2>
+    <p class="text-xs text-base-content/60 mb-6">
+        ¡Gracias por registrarte! Antes de continuar, verificá tu correo haciendo clic en el enlace que te acabamos de enviar. Si no lo recibiste, podés pedir otro.
+    </p>
 
     @if (session('status') == 'verification-link-sent')
-        <div class="mb-4 font-medium text-sm text-green-600">
-            {{ __('A new verification link has been sent to the email address you provided during registration.') }}
+        <div class="mb-4 font-semibold text-xs text-success">
+            Se envió un nuevo enlace de verificación al correo electrónico con el que te registraste.
         </div>
     @endif
 
-    <div class="mt-4 flex items-center justify-between">
+    <div class="space-y-3 mt-4">
         <form method="POST" action="{{ route('verification.send') }}">
             @csrf
-
-            <div>
-                <x-primary-button>
-                    {{ __('Resend Verification Email') }}
-                </x-primary-button>
-            </div>
+            <button type="submit" class="btn btn-primary w-full font-bold uppercase text-xs">
+                Reenviar correo de verificación
+            </button>
         </form>
 
-        <form method="POST" action="{{ route('logout') }}">
+        <form method="POST" action="{{ route('logout') }}" class="text-center">
             @csrf
-
-            <button type="submit" class="underline text-sm text-gray-600 hover:text-gray-900 rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
-                {{ __('Log Out') }}
+            <button type="submit" class="text-xs text-base-content/70 hover:text-error hover:underline">
+                Cerrar sesión
             </button>
         </form>
     </div>

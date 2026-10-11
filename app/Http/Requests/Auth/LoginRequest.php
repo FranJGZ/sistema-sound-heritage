@@ -38,35 +38,38 @@ class LoginRequest extends FormRequest
      *
      * @throws ValidationException
      */
-    public function authenticate(): void
+       public function authenticate(): void
     {
         $this->ensureIsNotRateLimited();
 
         if (! Auth::attempt($this->only('email', 'password'), $this->boolean('remember'))) {
-            RateLimiter::hit($this->throttleKey());
+            // Suma el intento fallido tanto a la IP como al correo por separado (bloqueo de 300 seg = 5 min)
+            RateLimiter::hit($this->ipThrottleKey(), 300);
+            RateLimiter::hit($this->emailThrottleKey(), 300);
 
             throw ValidationException::withMessages([
                 'email' => trans('auth.failed'),
             ]);
         }
 
-        RateLimiter::clear($this->throttleKey());
+        RateLimiter::clear($this->ipThrottleKey());
+        RateLimiter::clear($this->emailThrottleKey());
     }
 
-    /**
-     * Ensure the login request is not rate limited.
-     *
-     * @throws ValidationException
-     */
     public function ensureIsNotRateLimited(): void
     {
-        if (! RateLimiter::tooManyAttempts($this->throttleKey(), 5)) {
+        // Bloquea si se superaron los 5 intentos en la misma IP O en el mismo correo
+        if (! RateLimiter::tooManyAttempts($this->ipThrottleKey(), 5) &&
+            ! RateLimiter::tooManyAttempts($this->emailThrottleKey(), 5)) {
             return;
         }
 
         event(new Lockout($this));
 
-        $seconds = RateLimiter::availableIn($this->throttleKey());
+        $seconds = max(
+            RateLimiter::availableIn($this->ipThrottleKey()),
+            RateLimiter::availableIn($this->emailThrottleKey())
+        );
 
         throw ValidationException::withMessages([
             'email' => trans('auth.throttle', [
@@ -76,11 +79,15 @@ class LoginRequest extends FormRequest
         ]);
     }
 
-    /**
-     * Get the rate limiting throttle key for the request.
-     */
-    public function throttleKey(): string
+    // Candado 1: Bloquea la IP aunque el script cambie el correo en cada intento
+    public function ipThrottleKey(): string
     {
-        return Str::transliterate(Str::lower($this->string('email')).'|'.$this->ip());
+        return 'login_ip|' . $this->ip();
+    }
+
+    // Candado 2: Bloquea el correo (sin espacios) aunque el script cambie de IP
+    public function emailThrottleKey(): string
+    {
+        return 'login_email|' . Str::transliterate(Str::lower(trim($this->string('email'))));
     }
 }

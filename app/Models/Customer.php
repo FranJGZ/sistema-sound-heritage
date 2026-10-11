@@ -26,12 +26,13 @@ class Customer extends Model implements Auditable
     protected static function booted(): void
     {
         static::creating(function (Customer $customer) {
+            // Si el cliente tiene correo registrado, se le crea automáticamente su cuenta de usuario web
             if (! $customer->user_id && filled($customer->email)) {
                 $user = User::firstOrCreate(
                     ['email' => $customer->email],
                     [
                         'name'     => trim($customer->first_name . ' ' . $customer->last_name),
-                        'password' => bcrypt($customer->document_number),
+                        'password' => bcrypt($customer->document_number ?: '12345678'),
                     ]
                 );
 
@@ -44,13 +45,29 @@ class Customer extends Model implements Auditable
         });
 
         static::updating(function (Customer $customer) {
-            if ($customer->user) {
+            // Si no tenía cuenta y ahora se registra un correo:
+            if (! $customer->user_id && filled($customer->email)) {
+                $user = User::firstOrCreate(
+                    ['email' => $customer->email],
+                    [
+                        'name'     => trim($customer->first_name . ' ' . $customer->last_name),
+                        'password' => bcrypt($customer->document_number ?: '12345678'),
+                    ]
+                );
+
+                if (! $user->hasRole('Cliente')) {
+                    $user->assignRole('Cliente');
+                }
+
+                $customer->user_id = $user->id;
+            } elseif ($customer->user) {
                 $customer->user->update([
                     'name'  => trim($customer->first_name . ' ' . $customer->last_name),
                     'email' => $customer->email,
                 ]);
             }
         });
+
 
         static::deleting(function (Customer $customer) {
             if (! $customer->isForceDeleting() && $customer->user) {

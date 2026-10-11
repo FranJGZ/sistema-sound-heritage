@@ -77,13 +77,6 @@ class SponsorResource extends Resource
     {
         return $table
             ->columns([
-                Tables\Columns\TextColumn::make('id')
-                    ->label('ID')
-                    ->formatStateUsing(fn ($state): string => '#' . str_pad($state, 4, '0', STR_PAD_LEFT))
-                    ->weight(FontWeight::SemiBold)
-                    ->color('gray')
-                    ->sortable(),
-
                 Tables\Columns\TextColumn::make('name')
                     ->label('Auspiciante')
                     ->weight(FontWeight::Bold)

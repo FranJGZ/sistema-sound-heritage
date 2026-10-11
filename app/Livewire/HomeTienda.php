@@ -11,8 +11,35 @@ class HomeTienda extends Component
 {
     use Toast;
 
+    public function mount()
+    {
+        if (request()->query('verified') == '1' || session('status') === 'verified') {
+            $this->success(
+                title: '¡Correo verificado con éxito!',
+                description: 'Tu cuenta ya está activa y lista para comprar y reservar.',
+                position: 'toast-top toast-end',
+                icon: 'o-check-circle',
+                css: 'alert-success text-white font-bold shadow-xl',
+                timeout: 6000
+            );
+        }
+
+        if (request()->query('google_logged_in') == '1') {
+            $name = auth()->user()?->name ?? 'Usuario';
+            $this->success(
+                title: '¡Sesión iniciada con Google!',
+                description: "¡Hola, {$name}! Ya podés explorar y operar en la tienda.",
+                position: 'toast-top toast-end',
+                icon: 'o-check-circle',
+                css: 'alert-success text-white font-bold shadow-xl',
+                timeout: 5000
+            );
+        }
+    }
+
 
     public function render()
+
     {
         return view('livewire.home-tienda', [
             'productos' => Product::where('stock', '>', 0)->get()

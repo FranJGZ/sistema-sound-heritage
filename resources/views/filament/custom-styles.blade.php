@@ -1,4 +1,8 @@
+<link rel="icon" type="image/png" href="{{ asset('img/LogoTiendaNegro.png') }}" media="(prefers-color-scheme: light)">
+<link rel="icon" type="image/png" href="{{ asset('img/LogoTiendaBlanco.png') }}" media="(prefers-color-scheme: dark)">
 <style>
+    /* ==========================================================================
+
     /* ==========================================================================
        Sound Heritage - Corporate Visual Identity (Light & Dark Mode)
        ========================================================================== */
@@ -15,11 +19,11 @@
         background-color: #f8fafc !important;
         color: #0f172a !important;
     }
-    html:not(.dark) .fi-topbar {
+    html:not(.dark) .fi-topbar, html:not(.dark) .fi-topbar nav {
         background-color: #ffffff !important;
         border-bottom: 1px solid #e2e8f0 !important;
     }
-    html:not(.dark) .fi-sidebar {
+    html:not(.dark) .fi-sidebar, html:not(.dark) .fi-sidebar-header {
         background-color: #ffffff !important;
         border-right: 1px solid #e2e8f0 !important;
     }
@@ -51,11 +55,11 @@
         background-color: #070a1e !important;
         color: #f1f5f9 !important;
     }
-    html.dark .fi-topbar {
+    html.dark .fi-topbar, html.dark .fi-topbar nav {
         background-color: #0b1031 !important;
         border-bottom: 1px solid rgba(180, 141, 86, 0.25) !important;
     }
-    html.dark .fi-sidebar {
+    html.dark .fi-sidebar, html.dark .fi-sidebar-header {
         background-color: #0b1031 !important;
         border-right: 1px solid rgba(180, 141, 86, 0.25) !important;
     }
@@ -122,10 +126,24 @@
         background-color: #9a7645 !important;
     }
 
-    /* Logo */
+    /* Logo y Switch Instantáneo 0ms por CSS */
     .fi-logo, .fi-logo img, img.fi-logo {
         max-height: 3.2rem !important;
         width: auto !important;
         object-fit: contain !important;
+    }
+    html:not(.dark) .sh-logo-light { display: flex !important; }
+    html:not(.dark) .sh-logo-dark  { display: none !important; }
+    html.dark .sh-logo-light       { display: none !important; }
+    html.dark .sh-logo-dark        { display: flex !important; }
+        /* Oculta el selector de tema nativo dentro del menú desplegable del empleado */
+    .fi-dropdown-list:has(.fi-theme-switcher), .fi-theme-switcher { display: none !important; }
+    @media print {
+        .fi-sidebar, .fi-topbar, .fi-btn, .fi-header-actions {
+            display: none !important;
+        }
+        .fi-main {
+            padding: 0 !important;
+        }
     }
 </style>

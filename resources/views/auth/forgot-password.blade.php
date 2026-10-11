@@ -1,25 +1,28 @@
 <x-guest-layout>
-    <div class="mb-4 text-sm text-gray-600">
-        {{ __('Forgot your password? No problem. Just let us know your email address and we will email you a password reset link that will allow you to choose a new one.') }}
-    </div>
+    <h2 class="text-2xl font-extrabold text-base-content mb-1">Recuperar Contraseña</h2>
+    <p class="text-xs text-base-content/60 mb-6">
+        Ingresá tu correo electrónico y te enviaremos un enlace para elegir una contraseña nueva.
+    </p>
 
-    <!-- Session Status -->
     <x-auth-session-status class="mb-4" :status="session('status')" />
 
-    <form method="POST" action="{{ route('password.email') }}">
+    <form method="POST" action="{{ route('password.email') }}" class="space-y-4">
         @csrf
 
-        <!-- Email Address -->
+        <!-- Correo Electrónico -->
         <div>
-            <x-input-label for="email" :value="__('Email')" />
-            <x-text-input id="email" class="block mt-1 w-full" type="email" name="email" :value="old('email')" required autofocus />
-            <x-input-error :messages="$errors->get('email')" class="mt-2" />
+            <label for="email" class="block text-xs font-bold uppercase text-base-content/80 mb-1">Correo Electrónico</label>
+            <input id="email" type="email" name="email" value="{{ old('email') }}" required autofocus
+                   class="input input-bordered w-full bg-base-200 focus:bg-base-100 text-sm" placeholder="ejemplo@correo.com" />
+            <x-input-error :messages="$errors->get('email')" class="mt-1" />
         </div>
 
-        <div class="flex items-center justify-end mt-4">
-            <x-primary-button>
-                {{ __('Email Password Reset Link') }}
-            </x-primary-button>
-        </div>
+        <button type="submit" class="btn btn-primary w-full font-bold uppercase text-xs mt-2">
+            Enviar enlace de recuperación
+        </button>
+
+        <p class="text-center text-xs text-base-content/70 pt-2">
+            <a href="{{ route('login') }}" class="text-primary font-bold hover:underline">Volver a Iniciar Sesión</a>
+        </p>
     </form>
 </x-guest-layout>

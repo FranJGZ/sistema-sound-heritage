@@ -5,12 +5,47 @@
     <header class="sticky top-0 z-50 w-full bg-base-100/90 backdrop-blur-md border-b border-base-300 shadow-sm transition-colors duration-200">
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-4">
             
-            <!-- PARTE A: LOGO Y MARCA -->
-            <a href="/" class="flex items-center gap-2 text-primary font-black text-xl tracking-wider hover:opacity-80 transition-opacity">
-                <x-mary-icon name="o-musical-note" class="w-8 h-8 text-primary" />
-                <span class="text-base-content font-extrabold uppercase">
-                    SOUND<span class="text-primary">HERITAGE</span>
-                </span>
+            <!-- PARTE A: LOGO Y MARCA (DISCO + LETRAS CON TAMAÑO EN PÍXELES INDEPENDIENTE) -->
+            <!-- PARTE A: LOGO Y MARCA (DISCO + LETRAS CON MISMO TAMAÑO Y POSICIÓN EN AMBOS MODOS) -->
+            <a href="/" class="flex items-center hover:opacity-90 transition-opacity shrink-0" style="display: flex; flex-direction: row; align-items: center; text-decoration: none;">
+                
+                <!-- 1. VERSIÓN MODO CLARO (FONDO BLANCO -> LOGO Y LETRAS OSCURAS) -->
+                <div x-show="theme !== 'dark'">
+                    <div style="display: flex; flex-direction: row; align-items: center; gap: 10px; flex-wrap: nowrap;">
+                        <div style="height: 44px; width: 44px; display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
+                            <img 
+                                src="{{ asset('img/LogoTiendaNegro.png') }}" 
+                                alt="Sound Heritage Icono" 
+                                style="height: 44px; width: 44px; object-fit: contain; display: block;" 
+                            />
+                        </div>
+                        <img 
+                            src="{{ asset('img/LetrasTiendaNegro.png') }}" 
+                            alt="Sound Heritage" 
+                            style="height: 24px; width: auto; object-fit: contain; display: block; flex-shrink: 0;" 
+                        />
+                    </div>
+                </div>
+
+                <!-- 2. VERSIÓN MODO OSCURO (FONDO OSCURO -> LOGO Y LETRAS BLANCAS) -->
+                               <!-- 2. VERSIÓN MODO OSCURO (FONDO OSCURO -> LOGO Y LETRAS BLANCAS) -->
+                <div x-show="theme === 'dark'" style="display: none;">
+                    <div style="display: flex; flex-direction: row; align-items: center; gap: 10px; flex-wrap: nowrap;">
+                        <div style="height: 44px; width: 44px; display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
+                            <img 
+                                src="{{ asset('img/LogoTiendaBlanco.png') }}" 
+                                alt="Sound Heritage Icono" 
+                                style="height: 92px; width: auto; max-width: none; object-fit: contain; transform: translate(1px, 11.5px); display: block; pointer-events: none;" 
+                            />
+                        </div>
+                        <img 
+                            src="{{ asset('img/LetrasTiendaBlanco.png') }}" 
+                            alt="Sound Heritage" 
+                            style="height: 24px; width: auto; object-fit: contain; display: block; flex-shrink: 0;" 
+                        />
+                    </div>
+                </div>
+
             </a>
 
             <!-- PARTE B: BARRA DE BÚSQUEDA CENTRAL -->
@@ -35,11 +70,10 @@
                     title="Cambiar tema"
                     type="button"
                 >
-                    <!-- Icono Luna (se muestra solo si estamos en modo claro) -->
                     <x-mary-icon x-show="theme === 'light'" name="o-moon" class="w-5 h-5 text-base-content" />
-                    <!-- Icono Sol (se muestra solo si estamos en modo oscuro) -->
                     <x-mary-icon x-show="theme === 'dark'" name="o-sun" class="w-5 h-5 text-warning" />
                 </button>
+
                 @guest
                     <div class="hidden sm:flex items-center gap-3 text-xs font-semibold px-2">
                         <a href="{{ route('register') }}" class="text-base-content hover:text-primary transition-colors">
@@ -51,6 +85,7 @@
                         </a>
                     </div>
                 @endguest
+
                 @auth
                     <div class="dropdown dropdown-end">
                         <label tabindex="0" class="btn btn-ghost btn-sm text-xs font-bold gap-1 rounded-full px-3">
@@ -61,7 +96,7 @@
                         <ul tabindex="0" class="dropdown-content z-50 menu p-2 shadow-lg bg-base-100 border border-base-200 rounded-2xl w-52 text-xs gap-1 mt-2">
                             <li class="menu-title text-[10px] text-base-content/50 uppercase">Mi Cuenta</li>
                             
-                                                       @if(auth()->user()?->hasRole('Administrador'))
+                            @if(auth()->user()?->hasRole('Administrador'))
                                 <li>
                                     <a href="/admin" class="text-primary font-bold hover:bg-primary/10">
                                         <x-mary-icon name="o-cog-6-tooth" class="w-4 h-4" />
@@ -83,6 +118,8 @@
                                     </a>
                                 </li>
                             @endif
+
+                            <li>
                                 <a href="{{ route('profile.edit') }}">
                                     <x-mary-icon name="o-user" class="w-4 h-4" />
                                     Mi Perfil
@@ -102,26 +139,39 @@
                     </div>
                 @endauth
                 <!-- BOTÓN DEL CARRITO CON CONTADOR -->
-                <button class="btn btn-primary btn-sm rounded-full gap-2 px-4 shadow-sm" type="button">
-                    <x-mary-icon name="o-shopping-cart" class="w-4 h-4" />
-                    <span class="hidden sm:inline font-bold text-xs uppercase">Carrito</span>
-                    <!-- Badge numérico de artículos -->
-                    <span class="badge badge-sm badge-neutral font-black">
-                        {{ count(session('carrito', [])) }}
-                    </span>
+                <button class="btn btn-ghost btn-circle btn-sm relative" type="button" title="Carrito">
+                    <x-mary-icon name="o-shopping-cart" class="w-5 h-5 text-base-content" />
+                    @if(collect(session('carrito', []))->sum('cantidad') > 0)
+                        <span style="position: absolute; top: -2px; right: -2px; background-color: #dc2626; color: #ffffff; font-size: 10px; font-weight: 800; min-width: 17px; height: 17px; border-radius: 9999px; display: flex; align-items: center; justify-content: center; padding: 0 4px; line-height: 1;">
+                            {{ collect(session('carrito', []))->sum('cantidad') }}
+                        </span>
+                    @endif
                 </button>
             </div>
-
-        </div>
     </header>
+
+    @if(request()->query('verified') == '1' || request()->query('google_logged_in') == '1')
+        <script>
+            document.addEventListener('DOMContentLoaded', () => {
+                setTimeout(() => {
+                    const url = new URL(window.location.href);
+                    url.searchParams.delete('verified');
+                    url.searchParams.delete('google_logged_in');
+                    window.history.replaceState({}, document.title, url.pathname + (url.searchParams.toString() ? '?' + url.searchParams.toString() : ''));
+                }, 1500);
+            });
+        </script>
+    @endif
+
 
     <!-- ========================================================================= -->
     <!-- 2. CONTENIDO PRINCIPAL: CATÁLOGO DE PRODUCTOS                            -->
     <!-- ========================================================================= -->
     <main class="max-w-7xl mx-auto p-6">
+
+
         <h1 class="text-3xl font-extrabold mb-6 text-base-content">Nuestro Catálogo</h1>
 
-        <!-- Grilla de productos: 1 columna en celular, 2 en tablet, 4 en PC -->
         <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
             @foreach($productos as $producto)
                 <div class="card bg-base-100 shadow-md hover:shadow-xl hover:-translate-y-1 transition-all duration-200 border border-base-300 rounded-2xl overflow-hidden flex flex-col justify-between">
