@@ -15,6 +15,9 @@ use Illuminate\Database\Eloquent\SoftDeletingScope;
 
 class EmployeeResource extends Resource
 {
+    // =========================================================================
+    // 1. CONFIGURACIÓN DEL MENÚ Y MODELO
+    // =========================================================================
     protected static ?string $model = Employee::class;
     protected static ?string $navigationGroup = 'Administración y RRHH';
     protected static ?int $navigationSort = 1;
@@ -23,6 +26,7 @@ class EmployeeResource extends Resource
     protected static ?string $modelLabel = 'Empleado';
     protected static ?string $pluralModelLabel = 'Empleados';
 
+    // Precarga ciudad, puesto, cuenta de usuario y métricas de ventas para evitar consultas N+1 por cada empleado listado
     public static function getEloquentQuery(): Builder
     {
         return parent::getEloquentQuery()
@@ -34,6 +38,9 @@ class EmployeeResource extends Resource
             ]);
     }
 
+    // =========================================================================
+    // 2. FORMULARIO DE LEGAJO DEL EMPLEADO (CREATE / EDIT)
+    // =========================================================================
     public static function form(Form $form): Form
     {
         return $form
@@ -88,6 +95,7 @@ class EmployeeResource extends Resource
                                     ->label('Nombre de la Ciudad')
                                     ->required()
                                     ->maxLength(255),
+
                                 Forms\Components\Select::make('province_id')
                                     ->label('Provincia')
                                     ->relationship('province', 'name')
@@ -106,9 +114,15 @@ class EmployeeResource extends Resource
             ]);
     }
 
+    // =========================================================================
+    // 3. TABLA PRINCIPAL DE EMPLEADOS
+    // =========================================================================
     public static function table(Table $table): Table
     {
         return $table
+            // -----------------------------------------------------------------
+            // A) COLUMNAS VISIBLES EN EL LISTADO
+            // -----------------------------------------------------------------
             ->columns([
                 Tables\Columns\TextColumn::make('id')
                     ->label('Legajo')
@@ -153,10 +167,14 @@ class EmployeeResource extends Resource
 
                 Tables\Columns\TextColumn::make('estado')
                     ->label('Estado')
+                    ->state(fn (Employee $record): string => $record->trashed() ? 'De Baja' : 'Activo')
                     ->badge()
-                    ->getStateUsing(fn (Employee $record): string => $record->trashed() ? 'De Baja' : 'Activo')
                     ->color(fn (string $state): string => $state === 'Activo' ? 'success' : 'danger'),
             ])
+
+            // -----------------------------------------------------------------
+            // B) FILTROS DE BÚSQUEDA
+            // -----------------------------------------------------------------
             ->filters([
                 Tables\Filters\TrashedFilter::make()
                     ->label('Estado del Empleado')
@@ -169,6 +187,10 @@ class EmployeeResource extends Resource
                     ->relationship('employeeCategory', 'name')
                     ->preload(),
             ])
+
+            // -----------------------------------------------------------------
+            // C) ACCIONES POR FILA (EDITAR, DAR DE BAJA Y REACTIVAR)
+            // -----------------------------------------------------------------
             ->actions([
                 Tables\Actions\EditAction::make()
                     ->hidden(fn (Employee $record): bool => $record->trashed()),
@@ -182,15 +204,12 @@ class EmployeeResource extends Resource
                 Tables\Actions\RestoreAction::make()
                     ->label('Reactivar')
                     ->visible(fn (Employee $record): bool => $record->trashed()),
-            ])
-            ->bulkActions([]);
+            ]);
     }
 
-    public static function getRelations(): array
-    {
-        return [];
-    }
-
+    // =========================================================================
+    // 4. RUTAS DE LAS PÁGINAS DEL RECURSO
+    // =========================================================================
     public static function getPages(): array
     {
         return [

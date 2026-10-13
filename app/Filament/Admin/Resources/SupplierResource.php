@@ -11,10 +11,14 @@ use Filament\Support\Enums\FontWeight;
 use Filament\Tables;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletingScope;
 
 class SupplierResource extends Resource
 {
+    // =========================================================================
+    // 1. CONFIGURACIÓN DEL MENÚ Y MODELO
+    // =========================================================================
     protected static ?string $model = Supplier::class;
     protected static ?string $navigationGroup = 'Tienda';
     protected static ?int $navigationSort = 5;
@@ -23,6 +27,7 @@ class SupplierResource extends Resource
     protected static ?string $modelLabel = 'Proveedor';
     protected static ?string $pluralModelLabel = 'Proveedores';
 
+    // Desactiva SoftDeletingScope para conservar en el historial los proveedores dados de baja junto a sus órdenes de compra
     public static function getEloquentQuery(): Builder
     {
         return parent::getEloquentQuery()
@@ -31,6 +36,33 @@ class SupplierResource extends Resource
             ]);
     }
 
+    // =========================================================================
+    // 2. CONTROL DE PERMISOS (SOLO ADMINISTRADOR PUEDE MODIFICAR)
+    // El Encargado de Stock puede consultar el padrón de proveedores en modo lectura.
+    // =========================================================================
+    private static function isAdminUser(): bool
+    {
+        return auth()->user()?->hasRole('Administrador') ?? false;
+    }
+
+    public static function canCreate(): bool
+    {
+        return self::isAdminUser();
+    }
+
+    public static function canEdit(Model $record): bool
+    {
+        return self::isAdminUser();
+    }
+
+    public static function canDelete(Model $record): bool
+    {
+        return self::isAdminUser();
+    }
+
+    // =========================================================================
+    // 3. FORMULARIO DEL PROVEEDOR (CREATE / EDIT)
+    // =========================================================================
     public static function form(Form $form): Form
     {
         return $form
@@ -75,9 +107,15 @@ class SupplierResource extends Resource
             ]);
     }
 
+    // =========================================================================
+    // 4. TABLA PRINCIPAL DE PROVEEDORES
+    // =========================================================================
     public static function table(Table $table): Table
     {
         return $table
+            // -----------------------------------------------------------------
+            // A) COLUMNAS VISIBLES EN EL LISTADO
+            // -----------------------------------------------------------------
             ->columns([
                 Tables\Columns\TextColumn::make('name')
                     ->label('Proveedor')
@@ -102,10 +140,10 @@ class SupplierResource extends Resource
                     ->icon('heroicon-m-envelope')
                     ->placeholder('-'),
 
-                Tables\Columns\TextColumn::make('status')
+                Tables\Columns\TextColumn::make('estado')
                     ->label('Estado')
+                    ->state(fn (Supplier $record): string => $record->trashed() ? 'De Baja' : 'Activo')
                     ->badge()
-                    ->getStateUsing(fn (Supplier $record): string => $record->trashed() ? 'De Baja' : 'Activo')
                     ->color(fn (string $state): string => $state === 'Activo' ? 'success' : 'danger'),
 
                 Tables\Columns\TextColumn::make('created_at')
@@ -114,13 +152,21 @@ class SupplierResource extends Resource
                     ->sortable()
                     ->toggleable(isToggledHiddenByDefault: true),
             ])
-                        ->filters([
+
+            // -----------------------------------------------------------------
+            // B) FILTROS DE BÚSQUEDA
+            // -----------------------------------------------------------------
+            ->filters([
                 Tables\Filters\TrashedFilter::make()
                     ->label('Estado del Proveedor')
                     ->placeholder('Solo Proveedores Activos')
                     ->trueLabel('Todos (Activos + Dados de Baja)')
                     ->falseLabel('Solo Dados de Baja'),
             ])
+
+            // -----------------------------------------------------------------
+            // C) ACCIONES POR FILA Y MASIVAS
+            // -----------------------------------------------------------------
             ->actions([
                 Tables\Actions\EditAction::make()
                     ->color('primary')
@@ -149,6 +195,7 @@ class SupplierResource extends Resource
                         ->modalHeading('Dar de baja proveedores seleccionados')
                         ->modalSubmitActionLabel('Sí, dar de baja')
                         ->successNotificationTitle('Proveedores dados de baja'),
+
                     Tables\Actions\RestoreBulkAction::make()
                         ->label('Reactivar seleccionados')
                         ->modalHeading('Reactivar proveedores seleccionados')
@@ -158,11 +205,9 @@ class SupplierResource extends Resource
             ]);
     }
 
-    public static function getRelations(): array
-    {
-        return [];
-    }
-
+    // =========================================================================
+    // 5. RUTAS DE LAS PÁGINAS DEL RECURSO
+    // =========================================================================
     public static function getPages(): array
     {
         return [
@@ -170,19 +215,5 @@ class SupplierResource extends Resource
             'create' => Pages\CreateSupplier::route('/create'),
             'edit'   => Pages\EditSupplier::route('/{record}/edit'),
         ];
-    }
-    public static function canCreate(): bool
-    {
-        return auth()->user()?->hasRole('Administrador') ?? false;
-    }
-
-    public static function canEdit(\Illuminate\Database\Eloquent\Model $record): bool
-    {
-        return auth()->user()?->hasRole('Administrador') ?? false;
-    }
-
-    public static function canDelete(\Illuminate\Database\Eloquent\Model $record): bool
-    {
-        return auth()->user()?->hasRole('Administrador') ?? false;
     }
 }

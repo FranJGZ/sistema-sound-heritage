@@ -30,34 +30,202 @@ class CustomerResource extends Resource
     // Se precargan conteos y sumas con withCount/withSum para evitar el problema N+1 (una consulta extra por fila al evaluar si es VIP).
     // Además se desactiva SoftDeletingScope para que los clientes dados de baja sigan visibles al auditar ventas históricas.
     public static function getEloquentQuery(): Builder
-        {
-            return parent::getEloquentQuery()
-                ->with(['city.province', 'user'])
-                ->withCount('invoices')
-                ->withSum('invoices', 'total')
-                ->withoutGlobalScopes([SoftDeletingScope::class])
-                ->orderByRaw("CASE WHEN document_number = '0' THEN 0 ELSE 1 END"); // <- Siempre primero
-        }
+    {
+        return parent::getEloquentQuery()
+            ->with(['city.province', 'user'])
+            ->withCount('invoices')
+            ->withSum('invoices', 'total')
+            ->withoutGlobalScopes([SoftDeletingScope::class])
+            ->orderByRaw("CASE WHEN document_number = '0' THEN 0 ELSE 1 END");
+    }
 
     // =========================================================================
-    // 2. FORMULARIO DE CARGA Y EDICIÓN DE CLIENTE
+    // 2. MÉTODOS AUXILIARES REUTILIZABLES (CONDICIÓN IVA, SEGMENTO Y PDF)
+    // =========================================================================
+    public static function getTaxConditionOptions(): array
+    {
+        return [
+            'Consumidor Final'      => 'Consumidor Final',
+            'Responsable Inscripto' => 'Responsable Inscripto',
+            'Monotributista'        => 'Monotributista',
+            'Exento'                => 'Exento',
+        ];
+    }
+
+    // Calcula en tiempo real la categoría comercial del cliente para usar la misma regla exacta en la tabla y en el PDF
+    public static function getCommercialCategory(Customer $record): string
+    {
+        // Si es el cliente genérico de mostrador (DNI 0), nunca califica como VIP aunque acumule muchas ventas
+        if ($record->document_number === '0') {
+            return 'Mostrador';
+        }
+
+        $totalSpent     = (float) ($record->invoices_sum_total ?? 0);
+        $purchasesCount = (int) ($record->invoices_count ?? 0);
+
+        if ($totalSpent >= 300000 || $purchasesCount >= 3) {
+            return 'Cliente VIP';
+        }
+
+        if ($purchasesCount >= 1) {
+            return 'Regular';
+        }
+
+        return 'Sin Compras';
+    }
+
+    // Genera el reporte PDF de cartera de clientes respetando los filtros y el orden activos en pantalla
+    public static function exportPdf($livewire)
+    {
+        $customers = $livewire->getFilteredSortedTableQuery()
+            ->with(['city.province'])
+            ->withCount('invoices')
+            ->withSum('invoices', 'total')
+            ->get();
+
+        $totalInvoiced = (float) $customers->sum('invoices_sum_total');
+        $totalOrders   = (int) $customers->sum('invoices_count');
+        $vipCount      = 0;
+
+        $rows = [];
+        foreach ($customers as $customer) {
+            $totalSpent     = (float) ($customer->invoices_sum_total ?? 0);
+            $purchasesCount = (int) ($customer->invoices_count ?? 0);
+            $category       = self::getCommercialCategory($customer);
+
+            if ($category === 'Cliente VIP') {
+                $vipCount++;
+            }
+
+            $rows[] = [
+                $customer->id,
+                "{$customer->last_name}, {$customer->first_name}",
+                $customer->document_number,
+                $customer->tax_condition,
+                $customer->city ? "{$customer->city->name} ({$customer->city->province?->name})" : '-',
+                $purchasesCount,
+                '$' . number_format($totalSpent, 2, ',', '.'),
+                $category,
+            ];
+        }
+
+        $pdf = Pdf::loadView('reports.pdf-generic', [
+            'title'             => 'Cartera y Ranking Comercial de Clientes',
+            'filtros_aplicados' => collect($livewire->getTable()->getFilterIndicators())
+                ->map(fn ($indicator) => strip_tags((string) $indicator->getLabel()))
+                ->implode(' | ') ?: 'Ninguno (Todos los registros)',
+            'summary' => [
+                'Clientes Filtrados'    => $customers->count(),
+                'Clientes VIP'          => $vipCount,
+                'Compras Acumuladas'    => $totalOrders,
+                'Facturación Acumulada' => '$' . number_format($totalInvoiced, 2, ',', '.'),
+            ],
+            'headers' => ['ID', 'Cliente', 'DNI / CUIT', 'Condición IVA', 'Ciudad', 'Compras', 'Total Gastado ($)', 'Categoría'],
+            'rows'    => $rows,
+        ])->setPaper('a4', 'landscape');
+
+        return response()->streamDownload(fn () => print($pdf->output()), 'reporte-clientes-' . date('Ymd-His') . '.pdf');
+    }
+
+    /**
+     * Esquema para el modal de alta rápida de clientes desde el selector en Facturas o Inscripciones.
+     */
+    public static function getQuickCreateFormSchema(): array
+    {
+        return [
+            Forms\Components\Grid::make(2)->schema([
+                Forms\Components\TextInput::make('first_name')
+                    ->label('Nombre')
+                    ->required()
+                    ->maxLength(100),
+
+                Forms\Components\TextInput::make('last_name')
+                    ->label('Apellido')
+                    ->required()
+                    ->maxLength(100),
+
+                Forms\Components\TextInput::make('document_number')
+                    ->label('DNI / Documento')
+                    ->required()
+                    ->maxLength(20),
+
+                Forms\Components\TextInput::make('email')
+                    ->label('Correo Electrónico')
+                    ->email()
+                    ->nullable()
+                    ->maxLength(150),
+
+                Forms\Components\TextInput::make('phone')
+                    ->label('Teléfono / WhatsApp')
+                    ->tel()
+                    ->required()
+                    ->maxLength(30),
+
+                Forms\Components\Select::make('city_id')
+                    ->label('Ciudad')
+                    ->relationship('city', 'name')
+                    ->searchable()
+                    ->preload()
+                    ->required(),
+
+                Forms\Components\TextInput::make('address')
+                    ->label('Dirección')
+                    ->required()
+                    ->maxLength(200)
+                    ->columnSpanFull(),
+
+                Forms\Components\Select::make('tax_condition')
+                    ->label('Condición IVA')
+                    ->options(self::getTaxConditionOptions())
+                    ->default('Consumidor Final')
+                    ->required(),
+
+                Forms\Components\TextInput::make('tax_id')
+                    ->label('CUIT / CUIL')
+                    ->placeholder('Ej: 20-12345678-9')
+                    ->required()
+                    ->maxLength(20),
+            ]),
+        ];
+    }
+
+    // =========================================================================
+    // 3. FORMULARIO DE CARGA Y EDICIÓN DE CLIENTE
     // =========================================================================
     public static function form(Form $form): Form
     {
         return $form->schema([
             Forms\Components\Section::make('Datos Personales y de Contacto')
                 ->schema([
-                    Forms\Components\TextInput::make('first_name')->label('Nombre')->required()->maxLength(100),
-                    Forms\Components\TextInput::make('last_name')->label('Apellido')->required()->maxLength(100),
+                    Forms\Components\TextInput::make('first_name')
+                        ->label('Nombre')
+                        ->required()
+                        ->maxLength(100),
+
+                    Forms\Components\TextInput::make('last_name')
+                        ->label('Apellido')
+                        ->required()
+                        ->maxLength(100),
+
                     // Se usa ignoreRecord para que al editar otros datos del cliente el validador no rechace su propio DNI o email actual
-                    Forms\Components\TextInput::make('document_number')->label('DNI / Documento')->required()->unique(ignoreRecord: true)->maxLength(20),
+                    Forms\Components\TextInput::make('document_number')
+                        ->label('DNI / Documento')
+                        ->required()
+                        ->unique(ignoreRecord: true)
+                        ->maxLength(20),
+
                     Forms\Components\TextInput::make('email')
                         ->label('Correo Electrónico')
                         ->email()
                         ->nullable()
                         ->unique(ignoreRecord: true)
                         ->maxLength(150),
-                    Forms\Components\TextInput::make('phone')->label('Teléfono / WhatsApp')->tel()->required()->maxLength(30),
+
+                    Forms\Components\TextInput::make('phone')
+                        ->label('Teléfono / WhatsApp')
+                        ->tel()
+                        ->required()
+                        ->maxLength(30),
 
                     Forms\Components\Select::make('city_id')
                         ->label('Ciudad / Localidad')
@@ -67,11 +235,24 @@ class CustomerResource extends Resource
                         ->required()
                         // Permite registrar una localidad nueva en el momento sin perder los datos personales que ya se estaban cargando
                         ->createOptionForm([
-                            Forms\Components\TextInput::make('name')->label('Nombre de la Ciudad')->required()->maxLength(100),
-                            Forms\Components\Select::make('province_id')->label('Provincia')->relationship('province', 'name')->searchable()->preload()->required(),
+                            Forms\Components\TextInput::make('name')
+                                ->label('Nombre de la Ciudad')
+                                ->required()
+                                ->maxLength(100),
+
+                            Forms\Components\Select::make('province_id')
+                                ->label('Provincia')
+                                ->relationship('province', 'name')
+                                ->searchable()
+                                ->preload()
+                                ->required(),
                         ]),
 
-                    Forms\Components\TextInput::make('address')->label('Dirección / Domicilio')->required()->maxLength(200)->columnSpanFull(),
+                    Forms\Components\TextInput::make('address')
+                        ->label('Dirección / Domicilio')
+                        ->required()
+                        ->maxLength(200)
+                        ->columnSpanFull(),
 
                     Forms\Components\Placeholder::make('cuenta_usuario_activa')
                         ->label('Acceso a Tienda Online')
@@ -86,12 +267,7 @@ class CustomerResource extends Resource
                 ->schema([
                     Forms\Components\Select::make('tax_condition')
                         ->label('Condición frente al IVA')
-                        ->options([
-                            'Consumidor Final'      => 'Consumidor Final',
-                            'Responsable Inscripto' => 'Responsable Inscripto',
-                            'Monotributista'        => 'Monotributista',
-                            'Exento'                => 'Exento',
-                        ])
+                        ->options(self::getTaxConditionOptions())
                         ->default('Consumidor Final')
                         ->required(),
 
@@ -104,46 +280,8 @@ class CustomerResource extends Resource
         ]);
     }
 
-    /**
-     * Esquema para el modal de alta rápida de clientes desde el selector en Facturas o Reservas.
-     */
-    public static function getQuickCreateFormSchema(): array
-    {
-        return [
-            Forms\Components\Grid::make(2)->schema([
-                Forms\Components\TextInput::make('first_name')->label('Nombre')->required()->maxLength(100),
-                Forms\Components\TextInput::make('last_name')->label('Apellido')->required()->maxLength(100),
-                Forms\Components\TextInput::make('document_number')->label('DNI / Documento')->required()->maxLength(20),
-                Forms\Components\TextInput::make('email')
-                    ->label('Correo Electrónico')
-                    ->email()
-                    ->nullable()
-                    ->maxLength(150),
-                Forms\Components\TextInput::make('phone')->label('Teléfono / WhatsApp')->tel()->required()->maxLength(30),
-                Forms\Components\Select::make('city_id')
-                    ->label('Ciudad')
-                    ->relationship('city', 'name')
-                    ->searchable()
-                    ->preload()
-                    ->required(),
-                Forms\Components\TextInput::make('address')->label('Dirección')->required()->maxLength(200)->columnSpanFull(),
-                Forms\Components\Select::make('tax_condition')
-                    ->label('Condición IVA')
-                    ->options([
-                        'Consumidor Final'      => 'Consumidor Final',
-                        'Responsable Inscripto' => 'Responsable Inscripto',
-                        'Monotributista'        => 'Monotributista',
-                        'Exento'                => 'Exento',
-                    ])
-                    ->default('Consumidor Final')
-                    ->required(),
-                Forms\Components\TextInput::make('tax_id')->label('CUIT / CUIL')->placeholder('Ej: 20-12345678-9')->required()->maxLength(20),
-            ]),
-        ];
-    }
-
     // =========================================================================
-    // 3. TABLA PRINCIPAL DE CARTERA DE CLIENTES
+    // 4. TABLA PRINCIPAL DE CARTERA DE CLIENTES
     // =========================================================================
     public static function table(Table $table): Table
     {
@@ -152,7 +290,9 @@ class CustomerResource extends Resource
             // A) COLUMNAS VISIBLES EN EL LISTADO
             // -----------------------------------------------------------------
             ->columns([
-                Tables\Columns\TextColumn::make('id')->label('ID')->sortable(),
+                Tables\Columns\TextColumn::make('id')
+                    ->label('ID')
+                    ->sortable(),
 
                 Tables\Columns\TextColumn::make('last_name')
                     ->label('Cliente')
@@ -197,23 +337,7 @@ class CustomerResource extends Resource
                 // Se calcula en tiempo real en lugar de guardarse en la BD para que la categoría se actualice sola tras cada compra o anulación
                 Tables\Columns\TextColumn::make('nivel_vip')
                     ->label('Categoría')
-                    ->state(function (Customer $record): string {
-                        // Si es el mostrador, nunca es VIP aunque tenga 1000 ventas
-                        if ($record->document_number === '0') {
-                            return 'Mostrador';
-                        }
-
-                        $gastado = (float) ($record->invoices_sum_total ?? 0);
-                        $compras = (int) ($record->invoices_count ?? 0);
-
-                        if ($gastado >= 300000 || $compras >= 3) {
-                            return 'Cliente VIP';
-                        }
-                        if ($compras >= 1) {
-                            return 'Regular';
-                        }
-                        return 'Sin Compras';
-                    })
+                    ->state(fn (Customer $record): string => self::getCommercialCategory($record))
                     ->badge()
                     ->color(fn (string $state): string => match ($state) {
                         'Cliente VIP' => 'warning',
@@ -232,7 +356,7 @@ class CustomerResource extends Resource
             ->defaultSort('id', 'desc')
 
             // -----------------------------------------------------------------
-            // B) FILTROS DE AUDITORÍA Y BÚSQUEDA 
+            // B) FILTROS DE AUDITORÍA Y BÚSQUEDA
             // Estos mismos filtros afectan tanto a la tabla en pantalla como al exportar el PDF.
             // -----------------------------------------------------------------
             ->filters([
@@ -243,7 +367,6 @@ class CustomerResource extends Resource
                     ->trueLabel('Todos (Activos + De Baja)')
                     ->falseLabel('Solo Dados de Baja'),
 
-                
                 Tables\Filters\SelectFilter::make('segmento_comercial')
                     ->label('Segmento Comercial')
                     ->options([
@@ -254,33 +377,28 @@ class CustomerResource extends Resource
                         'asistentes'   => 'Asistieron a Eventos',
                     ])
                     ->query(function (Builder $query, array $data) {
-                        $valor = $data['value'] ?? null;
+                        $selectedSegment = $data['value'] ?? null;
 
-                        if ($valor === 'vip') {
-                            $query->where('document_number', '!=', '0') // <- Excluimos al mostrador
+                        if ($selectedSegment === 'vip') {
+                            $query->where('document_number', '!=', '0')
                                 ->where(function (Builder $subQuery) {
                                     $subQuery->has('invoices', '>=', 3)
                                         ->orWhereHas('invoices', fn (Builder $invoiceQuery) => $invoiceQuery->where('total', '>=', 300000));
                                 });
-                        } elseif ($valor === 'con_compras') {
+                        } elseif ($selectedSegment === 'con_compras') {
                             $query->has('invoices');
-                        } elseif ($valor === 'sin_compras') {
+                        } elseif ($selectedSegment === 'sin_compras') {
                             $query->doesntHave('invoices');
-                        } elseif ($valor === 'con_reservas') {
+                        } elseif ($selectedSegment === 'con_reservas') {
                             $query->has('reservations');
-                        } elseif ($valor === 'asistentes') {
+                        } elseif ($selectedSegment === 'asistentes') {
                             $query->has('attendances');
                         }
                     }),
 
                 Tables\Filters\SelectFilter::make('tax_condition')
                     ->label('Condición IVA')
-                    ->options([
-                        'Consumidor Final'      => 'Consumidor Final',
-                        'Responsable Inscripto' => 'Responsable Inscripto',
-                        'Monotributista'        => 'Monotributista',
-                        'Exento'                => 'Exento',
-                    ]),
+                    ->options(self::getTaxConditionOptions()),
 
                 // Usa relación anidada con punto (cliente -> ciudad -> provincia) para filtrar por provincia sin escribir subconsultas manuales
                 Tables\Filters\SelectFilter::make('provincia')
@@ -298,8 +416,14 @@ class CustomerResource extends Resource
                 // Filtra mediante la relación 'invoices' con whereHas para buscar clientes según el monto de sus compras
                 Tables\Filters\Filter::make('rango_gasto')
                     ->form([
-                        Forms\Components\TextInput::make('gasto_min')->label('Compra Mín. ($)')->numeric()->prefix('$'),
-                        Forms\Components\TextInput::make('gasto_max')->label('Compra Máx. ($)')->numeric()->prefix('$'),
+                        Forms\Components\TextInput::make('gasto_min')
+                            ->label('Compra Mín. ($)')
+                            ->numeric()
+                            ->prefix('$'),
+                        Forms\Components\TextInput::make('gasto_max')
+                            ->label('Compra Máx. ($)')
+                            ->numeric()
+                            ->prefix('$'),
                     ])
                     ->columns(2)
                     ->query(function (Builder $query, array $data) {
@@ -322,64 +446,7 @@ class CustomerResource extends Resource
                     ->label('Exportar PDF')
                     ->icon('heroicon-m-document-arrow-down')
                     ->color('primary')
-                    ->action(function ($livewire) {
-                        // Se usa getFilteredSortedTableQuery() para que el PDF respete los filtros y el orden aplicados en pantalla
-                        $customers = $livewire->getFilteredSortedTableQuery()
-                            ->with(['city.province'])
-                            ->withCount('invoices')
-                            ->withSum('invoices', 'total')
-                            ->get();
-
-                        $totalFacturado = (float) $customers->sum('invoices_sum_total');
-                        $totalCompras   = (int) $customers->sum('invoices_count');
-                        $cantidadVip    = 0;
-
-                        $rows = [];
-                        foreach ($customers as $customer) {
-                            $gastado = (float) ($customer->invoices_sum_total ?? 0);
-                            $compras = (int) ($customer->invoices_count ?? 0);
-
-                            if ($customer->document_number === '0') {
-                                $categoria = 'Mostrador';
-                            } elseif ($gastado >= 300000 || $compras >= 3) {
-                                $categoria = 'Cliente VIP';
-                                $cantidadVip++;
-                            } elseif ($compras >= 1) {
-                                $categoria = 'Regular';
-                            } else {
-                                $categoria = 'Sin Compras';
-                            }
-
-                            $rows[] = [
-                                $customer->id,
-                                "{$customer->last_name}, {$customer->first_name}",
-                                $customer->document_number,
-                                $customer->tax_condition,
-                                $customer->city ? "{$customer->city->name} ({$customer->city->province?->name})" : '-',
-                                $compras,
-                                '$' . number_format($gastado, 2, ',', '.'),
-                                $categoria,
-                            ];
-                        }
-
-                        $pdf = Pdf::loadView('reports.pdf-generic', [
-                            'title'             => 'Cartera y Ranking Comercial de Clientes',
-                            'filtros_aplicados' => collect($livewire->getTable()->getFilterIndicators())
-                                ->map(fn ($indicator) => strip_tags((string) $indicator->getLabel()))
-                                ->implode(' | ') ?: 'Ninguno (Todos los registros)',
-                            'summary' => [
-                                'Clientes Filtrados'    => $customers->count(),
-                                'Clientes VIP'          => $cantidadVip,
-                                'Compras Acumuladas'    => $totalCompras,
-                                'Facturación Acumulada' => '$' . number_format($totalFacturado, 2, ',', '.'),
-                            ],
-                            'headers' => ['ID', 'Cliente', 'DNI / CUIT', 'Condición IVA', 'Ciudad', 'Compras', 'Total Gastado ($)', 'Categoría'],
-                            'rows'    => $rows,
-                        ])->setPaper('a4', 'landscape');
-
-                        // Se usa streamDownload porque Livewire funciona por AJAX y no permite descargas directas tradicionales
-                        return response()->streamDownload(fn () => print($pdf->output()), 'reporte-clientes-' . date('Ymd-His') . '.pdf');
-                    }),
+                    ->action(fn ($livewire) => self::exportPdf($livewire)),
             ])
 
             // -----------------------------------------------------------------

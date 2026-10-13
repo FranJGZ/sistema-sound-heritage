@@ -19,26 +19,14 @@ class EditUser extends EditRecord
                 ->color('warning')
                 ->requiresConfirmation()
                 ->modalHeading('Enviar Enlace de Recuperación de Contraseña')
-                ->modalDescription(fn () => "¿Confirmás enviar un correo a {$this->record->email} con el enlace para que el usuario restablezca su propia contraseña?")
-                ->action(function () {
-                    $status = \Illuminate\Support\Facades\Password::sendResetLink(['email' => $this->record->email]);
+                ->modalDescription(
+                    fn () => "¿Confirmás enviar un correo a {$this->record->email} con el enlace para que el usuario restablezca su propia contraseña?"
+                )
+                ->action(fn () => UserResource::sendPasswordResetLink($this->record)),
 
-                    if ($status === \Illuminate\Support\Facades\Password::RESET_LINK_SENT) {
-                        \Filament\Notifications\Notification::make()
-                            ->title('Correo de recuperación enviado')
-                            ->body("Se envió el enlace de restablecimiento a {$this->record->email}.")
-                            ->success()
-                            ->send();
-                    } else {
-                        \Filament\Notifications\Notification::make()
-                            ->title('No se pudo enviar el correo')
-                            ->body(__($status))
-                            ->danger()
-                            ->send();
-                    }
-                }),
-
-            Actions\DeleteAction::make(),
+            Actions\DeleteAction::make()
+                ->label('Suspender')
+                ->hidden(fn (): bool => $this->record->id === auth()->id()),
         ];
     }
 

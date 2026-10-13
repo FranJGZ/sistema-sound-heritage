@@ -42,7 +42,7 @@ class PurchaseResource extends Resource
     }
 
     // =========================================================================
-    // 2. FUNCIÓN AUXILIAR DE CÁLCULO DE COSTO TOTAL
+    // 2. FUNCIONES AUXILIARES (CÁLCULO EN VIVO Y REPORTE PDF)
     // =========================================================================
 
     // Se usa '$get("purchaseDetails")' y '$get("../../purchaseDetails")' porque puede dispararse desde el Repeater padre o desde un input hijo
@@ -59,6 +59,52 @@ class PurchaseResource extends Resource
 
         $set('total', round($total, 2));
         $set('../../total', round($total, 2));
+    }
+
+    // Genera el reporte PDF de compras y abastecimiento respetando los filtros aplicados en pantalla
+    public static function exportPdf($livewire)
+    {
+        $purchases = $livewire->getFilteredSortedTableQuery()
+            ->with(['supplier', 'purchaseDetails.product'])
+            ->get();
+
+        // Se separan las activas para que la inversión total y las unidades ingresadas no sumen órdenes anuladas
+        $activePurchases = $purchases->whereNull('deleted_at');
+        $totalUnits      = $activePurchases->sum(fn ($purchase) => $purchase->purchaseDetails->sum('quantity'));
+
+        $rows = [];
+        foreach ($purchases as $purchase) {
+            $items = $purchase->purchaseDetails
+                ->map(fn ($detail) => ($detail->product?->name ?? 'Ítem') . ' (x' . $detail->quantity . ')')
+                ->implode(', ');
+
+            $rows[] = [
+                $purchase->id,
+                $purchase->purchase_date,
+                $purchase->supplier?->name ?? '-',
+                $items ?: '-',
+                $purchase->purchaseDetails->sum('quantity') . ' u.',
+                '$' . number_format((float) $purchase->total, 2, ',', '.'),
+                $purchase->trashed() ? 'Anulada' : 'Activa',
+            ];
+        }
+
+        $pdf = Pdf::loadView('reports.pdf-generic', [
+            'title'             => 'Reporte de Compras y Abastecimiento a Proveedores',
+            'filtros_aplicados' => collect($livewire->getTable()->getFilterIndicators())
+                ->map(fn ($indicator) => strip_tags((string) $indicator->getLabel()))
+                ->implode(' | ') ?: 'Ninguno (Todos los registros)',
+            'summary' => [
+                'Órdenes Activas'           => $activePurchases->count(),
+                'Unidades Ingresadas'       => $totalUnits . ' u.',
+                'Órdenes Anuladas'          => $purchases->whereNotNull('deleted_at')->count(),
+                'Inversión Total (Activas)' => '$' . number_format((float) $activePurchases->sum('total'), 2, ',', '.'),
+            ],
+            'headers' => ['N° Orden', 'Fecha', 'Proveedor', 'Mercadería Ingresada', 'Unidades', 'Costo Total ($)', 'Estado'],
+            'rows'    => $rows,
+        ])->setPaper('a4', 'landscape');
+
+        return response()->streamDownload(fn () => print($pdf->output()), 'reporte-compras-' . date('Ymd-His') . '.pdf');
     }
 
     // =========================================================================
@@ -131,11 +177,28 @@ class PurchaseResource extends Resource
                                     Forms\Components\Section::make('Alta Rápida de Nuevo Producto en Catálogo')
                                         ->description('El stock inicial arranca en 0 y se sumará automáticamente la cantidad comprada al guardar esta orden.')
                                         ->schema([
-                                            Forms\Components\TextInput::make('name')->label('Nombre del Producto / Modelo')->required()->maxLength(150)->columnSpanFull(),
-                                            Forms\Components\Select::make('type')->label('Categoría de Producto')->options(ProductResource::getProductTypeOptions())->live()->required(),
-                                            Forms\Components\TextInput::make('price')->label('Precio de Venta al Público ($)')->numeric()->prefix('$')->minValue(0)->required(),
+                                            Forms\Components\TextInput::make('name')
+                                                ->label('Nombre del Producto / Modelo')
+                                                ->required()
+                                                ->maxLength(150)
+                                                ->columnSpanFull(),
+
+                                            Forms\Components\Select::make('type')
+                                                ->label('Categoría de Producto')
+                                                ->options(ProductResource::getProductTypeOptions())
+                                                ->live()
+                                                ->required(),
+
+                                            Forms\Components\TextInput::make('price')
+                                                ->label('Precio de Venta al Público ($)')
+                                                ->numeric()
+                                                ->prefix('$')
+                                                ->minValue(0)
+                                                ->required(),
+
                                             // El stock inicial se fija oculto en 0 porque al guardar la compra el modelo sumará automáticamente la cantidad recibida
-                                            Forms\Components\Hidden::make('stock')->default(0),
+                                            Forms\Components\Hidden::make('stock')
+                                                ->default(0),
                                         ])->columns(2),
                                     ...ProductResource::getProductSpecsFormSchema(),
                                 ])
@@ -267,8 +330,14 @@ class PurchaseResource extends Resource
             // A) COLUMNAS VISIBLES EN EL LISTADO
             // -----------------------------------------------------------------
             ->columns([
-                Tables\Columns\TextColumn::make('id')->label('N° Orden')->sortable(),
-                Tables\Columns\TextColumn::make('supplier.name')->label('Proveedor')->searchable()->sortable(),
+                Tables\Columns\TextColumn::make('id')
+                    ->label('N° Orden')
+                    ->sortable(),
+
+                Tables\Columns\TextColumn::make('supplier.name')
+                    ->label('Proveedor')
+                    ->searchable()
+                    ->sortable(),
 
                 // Se limita a mostrar 2 ítems por fila con opción desplegable para que un remito largo no deforme el alto de la tabla
                 Tables\Columns\TextColumn::make('purchaseDetails.product.name')
@@ -278,15 +347,23 @@ class PurchaseResource extends Resource
                     ->limitList(2)
                     ->expandableLimitedList(),
 
-                Tables\Columns\TextColumn::make('purchase_date')->label('Fecha')->date('d/m/Y')->sortable(),
-                Tables\Columns\TextColumn::make('total')->label('Total Pagado')->money('ARS')->sortable()->weight('bold'),
+                Tables\Columns\TextColumn::make('purchase_date')
+                    ->label('Fecha')
+                    ->date('d/m/Y')
+                    ->sortable(),
+
+                Tables\Columns\TextColumn::make('total')
+                    ->label('Total Pagado')
+                    ->money('ARS')
+                    ->sortable()
+                    ->weight('bold'),
 
                 // Evalúa trashed() (deleted_at) para distinguir compras vigentes de órdenes anuladas
-                Tables\Columns\TextColumn::make('deleted_at')
+                Tables\Columns\TextColumn::make('estado')
                     ->label('Estado')
                     ->badge()
-                    ->getStateUsing(fn (Purchase $record) => $record->trashed() ? 'Anulada' : 'Activa')
-                    ->color(fn (string $state) => $state === 'Activa' ? 'success' : 'danger'),
+                    ->state(fn (Purchase $record): string => $record->trashed() ? 'Anulada' : 'Activa')
+                    ->color(fn (string $state): string => $state === 'Activa' ? 'success' : 'danger'),
             ])
             ->defaultSort('id', 'desc')
 
@@ -319,7 +396,7 @@ class PurchaseResource extends Resource
                     ->label('Categoría de Mercadería')
                     ->options(ProductResource::getProductTypeOptions())
                     ->query(function (Builder $query, array $data) {
-                        if (!empty($data['value'])) {
+                        if (! empty($data['value'])) {
                             $query->whereHas('purchaseDetails.product', function (Builder $subQuery) use ($data) {
                                 $subQuery->where('type', $data['value']);
                             });
@@ -329,8 +406,10 @@ class PurchaseResource extends Resource
                 // Se usa Filter personalizado porque el rango requiere comparar '>=' y '<=' sobre la misma columna purchase_date
                 Tables\Filters\Filter::make('purchase_date')
                     ->form([
-                        Forms\Components\DatePicker::make('desde')->label('Fecha Desde'),
-                        Forms\Components\DatePicker::make('hasta')->label('Fecha Hasta'),
+                        Forms\Components\DatePicker::make('desde')
+                            ->label('Fecha Desde'),
+                        Forms\Components\DatePicker::make('hasta')
+                            ->label('Fecha Hasta'),
                     ])
                     ->columns(2)
                     ->query(function (Builder $query, array $data) {
@@ -344,8 +423,14 @@ class PurchaseResource extends Resource
 
                 Tables\Filters\Filter::make('rango_total')
                     ->form([
-                        Forms\Components\TextInput::make('costo_min')->label('Total Mínimo ($)')->numeric()->prefix('$'),
-                        Forms\Components\TextInput::make('costo_max')->label('Total Máximo ($)')->numeric()->prefix('$'),
+                        Forms\Components\TextInput::make('costo_min')
+                            ->label('Total Mínimo ($)')
+                            ->numeric()
+                            ->prefix('$'),
+                        Forms\Components\TextInput::make('costo_max')
+                            ->label('Total Máximo ($)')
+                            ->numeric()
+                            ->prefix('$'),
                     ])
                     ->columns(2)
                     ->query(function (Builder $query, array $data) {
@@ -368,51 +453,7 @@ class PurchaseResource extends Resource
                     ->label('Exportar PDF')
                     ->icon('heroicon-m-document-arrow-down')
                     ->color('primary')
-                    ->action(function ($livewire) {
-                        // Se usa getFilteredSortedTableQuery() para que el PDF respete los filtros y el orden aplicados en pantalla
-                        $purchases = $livewire->getFilteredSortedTableQuery()
-                            ->with(['supplier', 'purchaseDetails.product'])
-                            ->get();
-
-                        // Se separan las activas para que la inversión total y las unidades ingresadas no sumen órdenes anuladas
-                        $activePurchases = $purchases->whereNull('deleted_at');
-                        $unidadesTotales = $activePurchases->sum(fn ($purchase) => $purchase->purchaseDetails->sum('quantity'));
-
-                        $rows = [];
-                        foreach ($purchases as $purchase) {
-                            $items = $purchase->purchaseDetails
-                                ->map(fn ($detail) => ($detail->product?->name ?? 'Ítem') . ' (x' . $detail->quantity . ')')
-                                ->implode(', ');
-
-                            $rows[] = [
-                                $purchase->id,
-                                $purchase->purchase_date,
-                                $purchase->supplier?->name ?? '-',
-                                $items ?: '-',
-                                $purchase->purchaseDetails->sum('quantity') . ' u.',
-                                '$' . number_format((float) $purchase->total, 2, ',', '.'),
-                                $purchase->trashed() ? 'Anulada' : 'Activa',
-                            ];
-                        }
-
-                        $pdf = Pdf::loadView('reports.pdf-generic', [
-                            'title'             => 'Reporte de Compras y Abastecimiento a Proveedores',
-                            'filtros_aplicados' => collect($livewire->getTable()->getFilterIndicators())
-                                ->map(fn ($indicator) => strip_tags((string) $indicator->getLabel()))
-                                ->implode(' | ') ?: 'Ninguno (Todos los registros)',
-                            'summary' => [
-                                'Órdenes Activas'           => $activePurchases->count(),
-                                'Unidades Ingresadas'       => $unidadesTotales . ' u.',
-                                'Órdenes Anuladas'          => $purchases->whereNotNull('deleted_at')->count(),
-                                'Inversión Total (Activas)' => '$' . number_format((float) $activePurchases->sum('total'), 2, ',', '.'),
-                            ],
-                            'headers' => ['N° Orden', 'Fecha', 'Proveedor', 'Mercadería Ingresada', 'Unidades', 'Costo Total ($)', 'Estado'],
-                            'rows'    => $rows,
-                        ])->setPaper('a4', 'landscape');
-
-                        // Se usa streamDownload porque Livewire funciona por AJAX y no permite descargas directas tradicionales
-                        return response()->streamDownload(fn () => print($pdf->output()), 'reporte-compras-' . date('Ymd-His') . '.pdf');
-                    }),
+                    ->action(fn ($livewire) => self::exportPdf($livewire)),
             ])
 
             // -----------------------------------------------------------------

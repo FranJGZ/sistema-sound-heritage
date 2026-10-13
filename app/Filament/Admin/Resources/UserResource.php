@@ -17,6 +17,9 @@ use Illuminate\Support\Facades\Password;
 
 class UserResource extends Resource
 {
+    // =========================================================================
+    // 1. CONFIGURACIÓN DEL MENÚ Y MODELO
+    // =========================================================================
     protected static ?string $model = User::class;
     protected static ?string $navigationGroup = 'Administración y RRHH';
     protected static ?int $navigationSort = 2;
@@ -25,12 +28,13 @@ class UserResource extends Resource
     protected static ?string $modelLabel = 'Usuario';
     protected static ?string $pluralModelLabel = 'Usuarios';
 
+    // Se deshabilita el alta manual porque las cuentas nacen vinculadas desde Empleados, Clientes o el Registro Web
     public static function canCreate(): bool
     {
-        // Las cuentas nacen desde Empleados, Clientes o el Registro Web
         return false;
     }
 
+    // Precarga roles y perfiles vinculados (empleado o cliente) y desactiva SoftDeletingScope para gestionar cuentas suspendidas
     public static function getEloquentQuery(): Builder
     {
         return parent::getEloquentQuery()
@@ -40,6 +44,48 @@ class UserResource extends Resource
             ]);
     }
 
+    // =========================================================================
+    // 2. MÉTODOS AUXILIARES (IDENTIFICACIÓN DE FICHA Y RECUPERACIÓN DE CLAVE)
+    // =========================================================================
+
+    // Determina si la cuenta de usuario pertenece a un legajo de empleado, a un cliente o al sistema web
+    private static function getLinkedProfileLabel(User $record): string
+    {
+        if ($record->employee) {
+            return 'Empleado (DNI ' . $record->employee->document_number . ')';
+        }
+
+        if ($record->customer) {
+            return 'Cliente (DNI ' . $record->customer->document_number . ')';
+        }
+
+        return 'Cuenta de Sistema / Web';
+    }
+
+    // Envía un enlace de restablecimiento de contraseña al correo del usuario y notifica el resultado en pantalla
+    public static function sendPasswordResetLink(User $record): void
+    {
+        $status = Password::sendResetLink(['email' => $record->email]);
+
+        if ($status === Password::RESET_LINK_SENT) {
+            Notification::make()
+                ->title('Correo de recuperación enviado')
+                ->body("Se envió el enlace de restablecimiento a {$record->email}.")
+                ->success()
+                ->send();
+            return;
+        }
+
+        Notification::make()
+            ->title('No se pudo enviar el correo')
+            ->body(__($status))
+            ->danger()
+            ->send();
+    }
+
+    // =========================================================================
+    // 3. FORMULARIO DE PERMISOS Y ROLES (EDIT)
+    // =========================================================================
     public static function form(Form $form): Form
     {
         return $form
@@ -77,9 +123,15 @@ class UserResource extends Resource
             ]);
     }
 
+    // =========================================================================
+    // 4. TABLA PRINCIPAL DE USUARIOS Y ROLES
+    // =========================================================================
     public static function table(Table $table): Table
     {
         return $table
+            // -----------------------------------------------------------------
+            // A) COLUMNAS VISIBLES EN EL LISTADO
+            // -----------------------------------------------------------------
             ->columns([
                 Tables\Columns\TextColumn::make('name')
                     ->label('Usuario')
@@ -94,16 +146,8 @@ class UserResource extends Resource
 
                 Tables\Columns\TextColumn::make('origen')
                     ->label('Ficha Vinculada')
+                    ->state(fn (User $record): string => self::getLinkedProfileLabel($record))
                     ->badge()
-                    ->getStateUsing(function (User $record): string {
-                        if ($record->employee) {
-                            return 'Empleado (DNI ' . $record->employee->document_number . ')';
-                        }
-                        if ($record->customer) {
-                            return 'Cliente (DNI ' . $record->customer->document_number . ')';
-                        }
-                        return 'Cuenta de Sistema / Web';
-                    })
                     ->color(fn (string $state): string => match (true) {
                         str_starts_with($state, 'Empleado') => 'info',
                         str_starts_with($state, 'Cliente')  => 'success',
@@ -122,10 +166,14 @@ class UserResource extends Resource
 
                 Tables\Columns\TextColumn::make('estado')
                     ->label('Estado')
+                    ->state(fn (User $record): string => $record->trashed() ? 'Suspendido' : 'Activo')
                     ->badge()
-                    ->getStateUsing(fn (User $record): string => $record->trashed() ? 'Suspendido' : 'Activo')
                     ->color(fn (string $state): string => $state === 'Activo' ? 'success' : 'danger'),
             ])
+
+            // -----------------------------------------------------------------
+            // B) FILTROS DE BÚSQUEDA
+            // -----------------------------------------------------------------
             ->filters([
                 Tables\Filters\TrashedFilter::make()
                     ->label('Estado de la Cuenta')
@@ -138,6 +186,10 @@ class UserResource extends Resource
                     ->relationship('roles', 'name')
                     ->preload(),
             ])
+
+            // -----------------------------------------------------------------
+            // C) ACCIONES POR FILA (ROLES, RESETEAR CLAVE, SUSPENDER Y REACTIVAR)
+            // -----------------------------------------------------------------
             ->actions([
                 Tables\Actions\EditAction::make()
                     ->label('Roles')
@@ -149,26 +201,13 @@ class UserResource extends Resource
                     ->color('warning')
                     ->requiresConfirmation()
                     ->modalHeading('Enviar Enlace de Recuperación de Contraseña')
-                    ->modalDescription(fn (User $record) => "¿Confirmás enviar un correo a {$record->email} con el enlace para que el usuario restablezca su propia contraseña?")
-                    ->action(function (User $record) {
-                        $status = Password::sendResetLink(['email' => $record->email]);
-
-                        if ($status === Password::RESET_LINK_SENT) {
-                            Notification::make()
-                                ->title('Correo de recuperación enviado')
-                                ->body("Se envió el enlace de restablecimiento a {$record->email}.")
-                                ->success()
-                                ->send();
-                        } else {
-                            Notification::make()
-                                ->title('No se pudo enviar el correo')
-                                ->body(__($status))
-                                ->danger()
-                                ->send();
-                        }
-                    })
+                    ->modalDescription(
+                        fn (User $record) => "¿Confirmás enviar un correo a {$record->email} con el enlace para que el usuario restablezca su propia contraseña?"
+                    )
+                    ->action(fn (User $record) => self::sendPasswordResetLink($record))
                     ->hidden(fn (User $record): bool => $record->trashed()),
 
+                // Impide que el usuario logueado suspenda su propia cuenta activa por accidente
                 Tables\Actions\DeleteAction::make()
                     ->label('Suspender')
                     ->modalHeading('Suspender acceso de usuario')
@@ -179,15 +218,12 @@ class UserResource extends Resource
                     ->label('Reactivar')
                     ->modalHeading('Reactivar cuenta de usuario')
                     ->visible(fn (User $record): bool => $record->trashed()),
-            ])
-            ->bulkActions([]);
+            ]);
     }
 
-    public static function getRelations(): array
-    {
-        return [];
-    }
-
+    // =========================================================================
+    // 5. RUTAS DE LAS PÁGINAS DEL RECURSO
+    // =========================================================================
     public static function getPages(): array
     {
         return [

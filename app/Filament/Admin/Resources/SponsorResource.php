@@ -15,14 +15,18 @@ use Illuminate\Database\Eloquent\SoftDeletingScope;
 
 class SponsorResource extends Resource
 {
+    // =========================================================================
+    // 1. CONFIGURACIÓN DEL MENÚ Y MODELO
+    // =========================================================================
     protected static ?string $model = Sponsor::class;
     protected static ?string $navigationGroup = 'Eventos y Sala';
-    protected static ?int $navigationSort = 3;
+    protected static ?int $navigationSort = 4;
     protected static ?string $navigationIcon = 'heroicon-o-sparkles';
     protected static ?string $navigationLabel = 'Auspiciantes';
     protected static ?string $modelLabel = 'Auspiciante';
     protected static ?string $pluralModelLabel = 'Auspiciantes';
 
+    // Precarga el conteo de eventos auspiciados y desactiva SoftDeletingScope para gestionar altas y bajas lógicas
     public static function getEloquentQuery(): Builder
     {
         return parent::getEloquentQuery()
@@ -32,6 +36,26 @@ class SponsorResource extends Resource
             ]);
     }
 
+    // =========================================================================
+    // 2. MÉTODOS AUXILIARES (OPCIONES REUTILIZABLES)
+    // =========================================================================
+
+    // Centraliza los rubros de auspiciantes para reutilizarlos en el formulario y en el filtro de la tabla
+    public static function getSponsorTypeOptions(): array
+    {
+        return [
+            'Instrumentos'    => 'Instrumentos Musicales',
+            'Accesorios'      => 'Accesorios e Insumos',
+            'Prensa y Medios' => 'Prensa, Radio y Medios',
+            'Bebidas'         => 'Gastronomía y Bebidas',
+            'Productora'      => 'Productora / Audio',
+            'Otro'            => 'Otro',
+        ];
+    }
+
+    // =========================================================================
+    // 3. FORMULARIO DEL AUSPICIANTE (CREATE / EDIT)
+    // =========================================================================
     public static function form(Form $form): Form
     {
         return $form
@@ -47,14 +71,7 @@ class SponsorResource extends Resource
 
                         Forms\Components\Select::make('type')
                             ->label('Rubro / Categoría')
-                            ->options([
-                                'Instrumentos'   => 'Instrumentos Musicales',
-                                'Accesorios'     => 'Accesorios e Insumos',
-                                'Prensa y Medios'=> 'Prensa, Radio y Medios',
-                                'Bebidas'        => 'Gastronomía y Bebidas',
-                                'Productora'     => 'Productora / Audio',
-                                'Otro'           => 'Otro',
-                            ])
+                            ->options(self::getSponsorTypeOptions())
                             ->required(),
 
                         Forms\Components\TextInput::make('phone')
@@ -73,9 +90,15 @@ class SponsorResource extends Resource
             ]);
     }
 
+    // =========================================================================
+    // 4. TABLA PRINCIPAL DE AUSPICIANTES
+    // =========================================================================
     public static function table(Table $table): Table
     {
         return $table
+            // -----------------------------------------------------------------
+            // A) COLUMNAS VISIBLES EN EL LISTADO
+            // -----------------------------------------------------------------
             ->columns([
                 Tables\Columns\TextColumn::make('name')
                     ->label('Auspiciante')
@@ -105,10 +128,14 @@ class SponsorResource extends Resource
 
                 Tables\Columns\TextColumn::make('estado')
                     ->label('Estado')
+                    ->state(fn (Sponsor $record): string => $record->trashed() ? 'De Baja' : 'Activo')
                     ->badge()
-                    ->getStateUsing(fn (Sponsor $record): string => $record->trashed() ? 'De Baja' : 'Activo')
                     ->color(fn (string $state): string => $state === 'Activo' ? 'success' : 'danger'),
             ])
+
+            // -----------------------------------------------------------------
+            // B) FILTROS DE BÚSQUEDA
+            // -----------------------------------------------------------------
             ->filters([
                 Tables\Filters\TrashedFilter::make()
                     ->label('Estado')
@@ -118,15 +145,12 @@ class SponsorResource extends Resource
 
                 Tables\Filters\SelectFilter::make('type')
                     ->label('Rubro')
-                    ->options([
-                        'Instrumentos'    => 'Instrumentos Musicales',
-                        'Accesorios'      => 'Accesorios e Insumos',
-                        'Prensa y Medios' => 'Prensa, Radio y Medios',
-                        'Bebidas'         => 'Gastronomía y Bebidas',
-                        'Productora'      => 'Productora / Audio',
-                        'Otro'            => 'Otro',
-                    ]),
+                    ->options(self::getSponsorTypeOptions()),
             ])
+
+            // -----------------------------------------------------------------
+            // C) ACCIONES POR FILA (EDITAR, DAR DE BAJA Y REACTIVAR)
+            // -----------------------------------------------------------------
             ->actions([
                 Tables\Actions\EditAction::make()
                     ->hidden(fn (Sponsor $record): bool => $record->trashed()),
@@ -138,15 +162,12 @@ class SponsorResource extends Resource
                 Tables\Actions\RestoreAction::make()
                     ->label('Reactivar')
                     ->visible(fn (Sponsor $record): bool => $record->trashed()),
-            ])
-            ->bulkActions([]);
+            ]);
     }
 
-    public static function getRelations(): array
-    {
-        return [];
-    }
-
+    // =========================================================================
+    // 5. RUTAS DE LAS PÁGINAS DEL RECURSO
+    // =========================================================================
     public static function getPages(): array
     {
         return [

@@ -10,8 +10,11 @@ class Purchase extends Model
 {
     use HasFactory, SoftDeletes;
 
-    protected $guarded = [];
-    protected $fillable = ['purchase_date', 'total', 'supplier_id'];
+    protected $fillable = [
+        'purchase_date',
+        'total',
+        'supplier_id',
+    ];
 
     protected static function booted(): void
     {
@@ -30,11 +33,6 @@ class Purchase extends Model
                     ->increment('stock', $detail->quantity);
             }
         });
-    }
-
-    public function details()
-    {
-        return $this->hasMany(PurchaseDetail::class);
     }
 
     public function supplier()

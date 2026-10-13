@@ -44,7 +44,145 @@ class EventResource extends Resource
     }
 
     // =========================================================================
-    // 2. FORMULARIO DE ORGANIZACIÓN DEL EVENTO (CREATE / EDIT)
+    // 2. MÉTODOS AUXILIARES (OPCIONES, VALIDACIÓN, INSCRIPCIÓN Y PDF)
+    // =========================================================================
+
+    // Centraliza los tipos de eventos culturales para reutilizarlos en el formulario y en los filtros de la tabla
+    public static function getEventTypeOptions(): array
+    {
+        return [
+            'Recital'            => 'Recital / Concierto en Vivo',
+            'Taller/Clínica'     => 'Taller / Clínica de Instrumentos',
+            'Presentación'       => 'Presentación de Disco / Gear',
+            'Encuentro Cultural' => 'Encuentro Cultural',
+            'Feria'              => 'Feria de Audio / Luthiers',
+        ];
+    }
+
+    // Valida que el salón no tenga otro evento propio ni una reserva externa confirmada en la misma fecha
+    private static function validateVenueAvailability(Get $get, ?Model $record): Closure
+    {
+        return function (string $attribute, $value, Closure $fail) use ($get, $record) {
+            $venueId = $get('venue_id') ?: 1;
+
+            $eventQuery = Event::where('venue_id', $venueId)
+                ->whereDate('date', $value);
+
+            // Excluye el ID del evento actual al editar para permitir cambiar su nombre o cupo sin que rebote contra sí mismo
+            if ($record) {
+                $eventQuery->where('id', '!=', $record->id);
+            }
+
+            if ($eventQuery->exists()) {
+                $fail('El salón ya tiene otro evento programado en esa misma fecha.');
+                return;
+            }
+
+            $hasConfirmedReservation = Reservation::where('venue_id', $venueId)
+                ->whereDate('date', $value)
+                ->where('status', 'Confirmada')
+                ->exists();
+
+            if ($hasConfirmedReservation) {
+                $fail('El salón ya está reservado por un cliente externo (Reserva Confirmada) en esa fecha.');
+            }
+        };
+    }
+
+    // Procesa la inscripción rápida de un asistente desde la fila del evento verificando cupo y duplicados
+    private static function registerAttendee(Event $record, array $data): void
+    {
+        $occupiedSpots = $record->attendances()->count();
+
+        if ($occupiedSpots >= $record->capacity) {
+            Notification::make()
+                ->title('Capacidad Completa')
+                ->body("El evento ya completó su cupo máximo de {$record->capacity} asistentes.")
+                ->danger()
+                ->send();
+            return;
+        }
+
+        $alreadyRegistered = Attendance::where('event_id', $record->id)
+            ->where('customer_id', $data['customer_id'])
+            ->exists();
+
+        if ($alreadyRegistered) {
+            Notification::make()
+                ->title('Cliente Ya Inscripto')
+                ->body('Este cliente ya se encuentra inscripto en este evento.')
+                ->warning()
+                ->send();
+            return;
+        }
+
+        Attendance::create([
+            'event_id'          => $record->id,
+            'customer_id'       => $data['customer_id'],
+            'registration_date' => $data['registration_date'],
+        ]);
+
+        Notification::make()
+            ->title('Inscripción Realizada')
+            ->body('El asistente fue registrado exitosamente al evento.')
+            ->success()
+            ->send();
+    }
+
+    // Genera el reporte PDF de eventos culturales respetando los filtros y el orden activos en pantalla
+    private static function exportPdf($livewire)
+    {
+        $events = $livewire->getFilteredSortedTableQuery()
+            ->with(['venue', 'eventSponsors.sponsor'])
+            ->withCount('attendances')
+            ->get();
+
+        $rows = [];
+        foreach ($events as $event) {
+            $sponsors = $event->eventSponsors
+                ->map(fn ($eventSponsor) => $eventSponsor->sponsor?->name)
+                ->filter()
+                ->implode(', ') ?: 'Sin sponsors';
+
+            $occupancyPercentage = $event->capacity > 0
+                ? round(($event->attendances_count / $event->capacity) * 100)
+                : 0;
+
+            $rows[] = [
+                $event->id,
+                $event->name,
+                $event->type,
+                $event->date,
+                "{$event->attendances_count} / {$event->capacity} ({$occupancyPercentage}%)",
+                $sponsors,
+                $event->trashed() ? 'Cancelado' : 'Activo',
+            ];
+        }
+
+        $pdf = Pdf::loadView('reports.pdf-generic', [
+            'title'             => 'Reporte de Eventos Culturales y Ocupación',
+            'filtros_aplicados' => collect($livewire->getTable()->getFilterIndicators())
+                ->map(fn ($indicator) => strip_tags((string) $indicator->getLabel()))
+                ->implode(' | ') ?: 'Ninguno (Todos los registros)',
+            'summary' => [
+                'Eventos Listados'   => $events->count(),
+                'Total Inscriptos'   => $events->sum('attendances_count'),
+                'Capacidad Ofrecida' => $events->sum('capacity') . ' cupos',
+                'Eventos Activos'    => $events->whereNull('deleted_at')->count(),
+            ],
+            'headers' => ['ID', 'Evento', 'Tipo', 'Fecha', 'Ocupación', 'Sponsors', 'Estado'],
+            'rows'    => $rows,
+        ])->setPaper('a4', 'landscape');
+
+        // Se usa streamDownload porque Livewire funciona por AJAX y no permite descargas directas tradicionales
+        return response()->streamDownload(
+            fn () => print($pdf->output()),
+            'reporte-eventos-' . date('Ymd-His') . '.pdf'
+        );
+    }
+
+    // =========================================================================
+    // 3. FORMULARIO DE ORGANIZACIÓN DEL EVENTO (CREATE / EDIT)
     // =========================================================================
     public static function form(Form $form): Form
     {
@@ -55,17 +193,15 @@ class EventResource extends Resource
             Forms\Components\Section::make('Información del Evento')
                 ->description('Organización de clínicas, recitales y talleres en el Salón de Sound Heritage.')
                 ->schema([
-                    Forms\Components\TextInput::make('name')->label('Nombre del Evento')->required()->maxLength(150)->columnSpanFull(),
+                    Forms\Components\TextInput::make('name')
+                        ->label('Nombre del Evento')
+                        ->required()
+                        ->maxLength(150)
+                        ->columnSpanFull(),
 
                     Forms\Components\Select::make('type')
                         ->label('Tipo de Evento')
-                        ->options([
-                            'Recital'            => 'Recital / Concierto en Vivo',
-                            'Taller/Clínica'     => 'Taller / Clínica de Instrumentos',
-                            'Presentación'       => 'Presentación de Disco / Gear',
-                            'Encuentro Cultural' => 'Encuentro Cultural',
-                            'Feria'              => 'Feria de Audio / Luthiers',
-                        ])
+                        ->options(self::getEventTypeOptions())
                         ->required(),
 
                     // Se fija por defecto el salón principal (ID 1) porque el local cuenta con una única sala para eventos
@@ -79,31 +215,8 @@ class EventResource extends Resource
                     Forms\Components\DatePicker::make('date')
                         ->label('Fecha del Evento')
                         ->required()
-                        // Bloquea la fecha si el salón ya tiene otro evento propio o un alquiler confirmado a terceros ese mismo día
                         ->rules([
-                            fn (Get $get, ?Model $record): Closure => function (string $attribute, $value, Closure $fail) use ($get, $record) {
-                                $venueId = $get('venue_id') ?: 1;
-
-                                $consultaEvento = Event::where('venue_id', $venueId)->whereDate('date', $value);
-                                // Excluye el ID del evento actual al editar para permitir cambiar su nombre o cupo sin que rebote contra sí mismo
-                                if ($record) {
-                                    $consultaEvento->where('id', '!=', $record->id);
-                                }
-
-                                if ($consultaEvento->exists()) {
-                                    $fail('El salón ya tiene otro evento programado en esa misma fecha.');
-                                    return;
-                                }
-
-                                $existeReserva = Reservation::where('venue_id', $venueId)
-                                    ->whereDate('date', $value)
-                                    ->where('status', 'Confirmada')
-                                    ->exists();
-
-                                if ($existeReserva) {
-                                    $fail('El salón ya está reservado por un cliente externo (Reserva Confirmada) en esa fecha.');
-                                }
-                            },
+                            fn (Get $get, ?Model $record): Closure => self::validateVenueAvailability($get, $record),
                         ]),
 
                     // Se limita el tope máximo a 100 personas por la capacidad física habilitada del salón
@@ -145,7 +258,7 @@ class EventResource extends Resource
     }
 
     // =========================================================================
-    // 3. TABLA PRINCIPAL DE EVENTOS CULTURALES
+    // 4. TABLA PRINCIPAL DE EVENTOS CULTURALES
     // =========================================================================
     public static function table(Table $table): Table
     {
@@ -154,10 +267,25 @@ class EventResource extends Resource
             // A) COLUMNAS VISIBLES EN EL LISTADO
             // -----------------------------------------------------------------
             ->columns([
-                Tables\Columns\TextColumn::make('id')->label('ID')->sortable(),
-                Tables\Columns\TextColumn::make('name')->label('Evento')->searchable()->sortable()->weight('bold'),
-                Tables\Columns\TextColumn::make('type')->label('Tipo')->badge()->color('primary'),
-                Tables\Columns\TextColumn::make('date')->label('Fecha')->date('d/m/Y')->sortable(),
+                Tables\Columns\TextColumn::make('id')
+                    ->label('ID')
+                    ->sortable(),
+
+                Tables\Columns\TextColumn::make('name')
+                    ->label('Evento')
+                    ->searchable()
+                    ->sortable()
+                    ->weight('bold'),
+
+                Tables\Columns\TextColumn::make('type')
+                    ->label('Tipo')
+                    ->badge()
+                    ->color('primary'),
+
+                Tables\Columns\TextColumn::make('date')
+                    ->label('Fecha')
+                    ->date('d/m/Y')
+                    ->sortable(),
 
                 // Alerta en amarillo al superar el 70% de ocupación del salón y en rojo cuando se agotan las localidades
                 Tables\Columns\TextColumn::make('ocupacion')
@@ -204,15 +332,15 @@ class EventResource extends Resource
                         'sin_inscriptos' => 'Sin Inscriptos aún (0)',
                     ])
                     ->query(function (Builder $query, array $data) {
-                        $valor = $data['value'] ?? null;
+                        $selectedLevel = $data['value'] ?? null;
 
-                        if ($valor === 'alta') {
+                        if ($selectedLevel === 'alta') {
                             $query->has('attendances', '>=', 5);
-                        } elseif ($valor === 'con_inscriptos') {
+                        } elseif ($selectedLevel === 'con_inscriptos') {
                             $query->has('attendances');
-                        } elseif ($valor === 'baja') {
+                        } elseif ($selectedLevel === 'baja') {
                             $query->has('attendances', '>=', 1)->has('attendances', '<', 5);
-                        } elseif ($valor === 'sin_inscriptos') {
+                        } elseif ($selectedLevel === 'sin_inscriptos') {
                             $query->doesntHave('attendances');
                         }
                     }),
@@ -226,13 +354,7 @@ class EventResource extends Resource
 
                 Tables\Filters\SelectFilter::make('type')
                     ->label('Tipo de Evento')
-                    ->options([
-                        'Recital'            => 'Recital / Concierto en Vivo',
-                        'Taller/Clínica'     => 'Taller / Clínica de Instrumentos',
-                        'Presentación'       => 'Presentación de Disco / Gear',
-                        'Encuentro Cultural' => 'Encuentro Cultural',
-                        'Feria'              => 'Feria de Audio / Luthiers',
-                    ]),
+                    ->options(self::getEventTypeOptions()),
 
                 // Usa relación anidada con punto para filtrar eventos según la tabla intermedia event_sponsors
                 Tables\Filters\SelectFilter::make('sponsor')
@@ -259,8 +381,11 @@ class EventResource extends Resource
                 // Se usa Filter personalizado porque el rango requiere comparar '>=' y '<=' sobre la misma columna date
                 Tables\Filters\Filter::make('date')
                     ->form([
-                        Forms\Components\DatePicker::make('desde')->label('Fecha Desde'),
-                        Forms\Components\DatePicker::make('hasta')->label('Fecha Hasta'),
+                        Forms\Components\DatePicker::make('desde')
+                            ->label('Fecha Desde'),
+
+                        Forms\Components\DatePicker::make('hasta')
+                            ->label('Fecha Hasta'),
                     ])
                     ->columns(2)
                     ->columnSpan(2)
@@ -284,57 +409,11 @@ class EventResource extends Resource
                     ->label('Exportar PDF')
                     ->icon('heroicon-m-document-arrow-down')
                     ->color('primary')
-                    ->action(function ($livewire) {
-                        // Se usa getFilteredSortedTableQuery() para que el PDF respete los filtros y el orden aplicados en pantalla
-                        $events = $livewire->getFilteredSortedTableQuery()
-                            ->with(['venue', 'eventSponsors.sponsor'])
-                            ->withCount('attendances')
-                            ->get();
-
-                        $rows = [];
-                        foreach ($events as $event) {
-                            $sponsors = $event->eventSponsors
-                                ->map(fn ($eventSponsor) => $eventSponsor->sponsor?->name)
-                                ->filter()
-                                ->implode(', ') ?: 'Sin sponsors';
-
-                            $porcentaje = $event->capacity > 0
-                                ? round(($event->attendances_count / $event->capacity) * 100)
-                                : 0;
-
-                            $rows[] = [
-                                $event->id,
-                                $event->name,
-                                $event->type,
-                                $event->date,
-                                "{$event->attendances_count} / {$event->capacity} ({$porcentaje}%)",
-                                $sponsors,
-                                $event->trashed() ? 'Cancelado' : 'Activo',
-                            ];
-                        }
-
-                        $pdf = Pdf::loadView('reports.pdf-generic', [
-                            'title'             => 'Reporte de Eventos Culturales y Ocupación',
-                            'filtros_aplicados' => collect($livewire->getTable()->getFilterIndicators())
-                                ->map(fn ($indicator) => strip_tags((string) $indicator->getLabel()))
-                                ->implode(' | ') ?: 'Ninguno (Todos los registros)',
-                            'summary' => [
-                                'Eventos Listados'   => $events->count(),
-                                'Total Inscriptos'   => $events->sum('attendances_count'),
-                                'Capacidad Ofrecida' => $events->sum('capacity') . ' cupos',
-                                'Eventos Activos'    => $events->whereNull('deleted_at')->count(),
-                            ],
-                            'headers' => ['ID', 'Evento', 'Tipo', 'Fecha', 'Ocupación', 'Sponsors', 'Estado'],
-                            'rows'    => $rows,
-                        ])->setPaper('a4', 'landscape');
-
-                        // Se usa streamDownload porque Livewire funciona por AJAX y no permite descargas directas tradicionales
-                        return response()->streamDownload(fn () => print($pdf->output()), 'reporte-eventos-' . date('Ymd-His') . '.pdf');
-                    }),
+                    ->action(fn ($livewire) => self::exportPdf($livewire)),
             ])
 
             // -----------------------------------------------------------------
-            // D) ACCIONES POR CADA FILA (EDITAR, CANCELAR Y REACTIVAR)
+            // D) ACCIONES POR CADA FILA (INSCRIBIR, EDITAR, CANCELAR Y REACTIVAR)
             // -----------------------------------------------------------------
             ->actions([
                 Tables\Actions\Action::make('inscribir')
@@ -347,8 +426,16 @@ class EventResource extends Resource
                     ->form([
                         Forms\Components\Select::make('customer_id')
                             ->label('Cliente Asistente')
-                            ->relationship('attendances.customer', 'last_name', modifyQueryUsing: fn (Builder $query) => $query->where('document_number', '!=', '0')->orderBy('last_name'))
-                            ->getOptionLabelFromRecordUsing(fn ($record) => "{$record->last_name}, {$record->first_name} (DNI: {$record->document_number})")
+                            ->relationship(
+                                'attendances.customer',
+                                'last_name',
+                                modifyQueryUsing: fn (Builder $query) => $query
+                                    ->where('document_number', '!=', '0')
+                                    ->orderBy('last_name')
+                            )
+                            ->getOptionLabelFromRecordUsing(
+                                fn ($record) => "{$record->last_name}, {$record->first_name} (DNI: {$record->document_number})"
+                            )
                             ->searchable(['first_name', 'last_name', 'document_number'])
                             ->preload()
                             ->required()
@@ -364,42 +451,7 @@ class EventResource extends Resource
                             ->default(now())
                             ->required(),
                     ])
-                    ->action(function (Event $record, array $data) {
-                        $ocupados = $record->attendances()->count();
-                        if ($ocupados >= $record->capacity) {
-                            Notification::make()
-                                ->title('Capacidad Completa')
-                                ->body("El evento ya completó su cupo máximo de {$record->capacity} asistentes.")
-                                ->danger()
-                                ->send();
-                            return;
-                        }
-
-                        $alreadyRegistered = Attendance::where('event_id', $record->id)
-                            ->where('customer_id', $data['customer_id'])
-                            ->exists();
-
-                        if ($alreadyRegistered) {
-                            Notification::make()
-                                ->title('Cliente Ya Inscripto')
-                                ->body('Este cliente ya se encuentra inscripto en este evento.')
-                                ->warning()
-                                ->send();
-                            return;
-                        }
-
-                        Attendance::create([
-                            'event_id'          => $record->id,
-                            'customer_id'       => $data['customer_id'],
-                            'registration_date' => $data['registration_date'],
-                        ]);
-
-                        Notification::make()
-                            ->title('Inscripción Realizada')
-                            ->body('El asistente fue registrado exitosamente al evento.')
-                            ->success()
-                            ->send();
-                    }),
+                    ->action(fn (Event $record, array $data) => self::registerAttendee($record, $data)),
 
                 Tables\Actions\EditAction::make()
                     ->hidden(fn (Event $record) => $record->trashed()),
@@ -418,7 +470,7 @@ class EventResource extends Resource
     }
 
     // =========================================================================
-    // 4. RUTAS DE LAS PÁGINAS DEL RECURSO
+    // 5. RUTAS DE LAS PÁGINAS DEL RECURSO
     // =========================================================================
     public static function getPages(): array
     {

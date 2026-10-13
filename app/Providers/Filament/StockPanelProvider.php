@@ -2,66 +2,41 @@
 
 namespace App\Providers\Filament;
 
+use App\Filament\Admin\Resources\ProductResource;
+use App\Filament\Admin\Resources\PurchaseResource;
+use App\Filament\Admin\Resources\SupplierResource;
 use Filament\Http\Middleware\Authenticate;
 use Filament\Http\Middleware\AuthenticateSession;
 use Filament\Http\Middleware\DisableBladeIconComponents;
 use Filament\Http\Middleware\DispatchServingFilamentEvent;
-use Filament\Navigation\MenuItem;
 use Filament\Pages;
 use Filament\Panel;
 use Filament\PanelProvider;
-use Filament\Support\Colors\Color;
-use Filament\View\PanelsRenderHook;
 use Filament\Widgets;
 use Illuminate\Cookie\Middleware\AddQueuedCookiesToResponse;
 use Illuminate\Cookie\Middleware\EncryptCookies;
 use Illuminate\Foundation\Http\Middleware\VerifyCsrfToken;
 use Illuminate\Routing\Middleware\SubstituteBindings;
 use Illuminate\Session\Middleware\StartSession;
-use Illuminate\Support\HtmlString;
 use Illuminate\View\Middleware\ShareErrorsFromSession;
 
 class StockPanelProvider extends PanelProvider
 {
+    // Configura el panel de Depósito (/stock) exponiendo únicamente los recursos de inventario y compras
     public function panel(Panel $panel): Panel
     {
         return $panel
             ->id('stock')
             ->path('stock')
             ->brandName('Sound Heritage - Stock')
-            ->brandLogo(asset('img/Logo_SH.png'))
-            ->darkModeBrandLogo(asset('img/Logo_blanco_sh.png'))
-            ->brandLogoHeight('3.2rem')
-            ->font('Figtree')
-            ->colors([
-                'primary'   => Color::hex('#b48d56'), // Dorado corporativo
-                'secondary' => Color::hex('#0b1031'), // Azul marino corporativo
-                'gray'      => Color::Slate,
-                'info'      => Color::Blue,
-                'success'   => Color::Emerald,
-                'warning'   => Color::Amber,
-                'danger'    => Color::Rose,
-            ])
-            ->userMenuItems([
-                MenuItem::make()
-                    ->label('Volver a la Tienda')
-                    ->url('/')
-                    ->icon('heroicon-o-building-storefront'),
-            ])
-            ->renderHook(
-                PanelsRenderHook::USER_MENU_BEFORE,
-                fn (): \Illuminate\Contracts\View\View => view('filament.theme-toggle')
-            )
-            ->renderHook(
-                PanelsRenderHook::HEAD_END,
-                fn (): HtmlString => new HtmlString(view('filament.custom-styles')->render())
-            )
-            ->discoverResources(in: app_path('Filament/Stock/Resources'), for: 'App\\Filament\\Stock\\Resources')
-            ->discoverPages(in: app_path('Filament/Stock/Pages'), for: 'App\\Filament\\Stock\\Pages')
             ->pages([
                 Pages\Dashboard::class,
             ])
-            ->discoverWidgets(in: app_path('Filament/Stock/Widgets'), for: 'App\\Filament\\Stock\\Widgets')
+            ->resources([
+                ProductResource::class,
+                PurchaseResource::class,
+                SupplierResource::class,
+            ])
             ->widgets([
                 Widgets\AccountWidget::class,
                 Widgets\FilamentInfoWidget::class,
@@ -76,11 +51,6 @@ class StockPanelProvider extends PanelProvider
                 SubstituteBindings::class,
                 DisableBladeIconComponents::class,
                 DispatchServingFilamentEvent::class,
-            ])
-            ->resources([
-                \App\Filament\Admin\Resources\ProductResource::class,
-                \App\Filament\Admin\Resources\PurchaseResource::class,
-                \App\Filament\Admin\Resources\SupplierResource::class,
             ])
             ->authMiddleware([
                 Authenticate::class,

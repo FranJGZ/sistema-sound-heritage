@@ -20,7 +20,6 @@ use Illuminate\Database\Eloquent\Model;
 
 class ReservationResource extends Resource
 {
-
     // =========================================================================
     // 1. CONFIGURACIÓN DEL MENÚ Y MODELO
     // Se agrupa en 'Eventos y Sala' con orden 2 para quedar debajo de Eventos Propios.
@@ -32,8 +31,115 @@ class ReservationResource extends Resource
     protected static ?string $modelLabel = 'Reserva de Sala';
     protected static ?string $pluralModelLabel = 'Reservas de Sala';
 
+    // Precarga el cliente y el salón para evitar consultas N+1 al mostrar cada fila de la tabla
+    public static function getEloquentQuery(): Builder
+    {
+        return parent::getEloquentQuery()
+            ->with(['customer', 'venue']);
+    }
+
     // =========================================================================
-    // 2. FORMULARIO DE SOLICITUD DE RESERVA (CREATE / EDIT)
+    // 2. MÉTODOS AUXILIARES (OPCIONES, VALIDACIÓN DE SALÓN Y EXPORTACIÓN PDF)
+    // =========================================================================
+
+    // Centraliza los motivos de alquiler de sala para reutilizarlos en el formulario y en los filtros de la tabla
+    public static function getReservationTypeOptions(): array
+    {
+        return [
+            'Ensayo de Banda'          => 'Ensayo de Banda',
+            'Ensayo General'           => 'Ensayo General',
+            'Grabación Acústica'       => 'Grabación Acústica',
+            'Lanzamiento de Videoclip' => 'Lanzamiento de Videoclip',
+            'Masterclass Externa'      => 'Masterclass Externa',
+            'Evento Privado'           => 'Evento Privado',
+        ];
+    }
+
+    // Centraliza los estados posibles de una solicitud de reserva de sala
+    public static function getReservationStatusOptions(): array
+    {
+        return [
+            'Pendiente'  => 'Pendiente de Aprobación',
+            'Confirmada' => 'Confirmada',
+            'Cancelada'  => 'Cancelada',
+        ];
+    }
+
+    // Valida que la fecha solicitada no choque con un evento propio del local ni con otra reserva ya confirmada
+    private static function validateVenueAvailability(Get $get, ?Model $record): Closure
+    {
+        return function (string $attribute, $value, Closure $fail) use ($get, $record) {
+            $venueId = $get('venue_id') ?: 1;
+
+            $hasOwnEvent = Event::where('venue_id', $venueId)
+                ->whereDate('date', $value)
+                ->exists();
+
+            if ($hasOwnEvent) {
+                $fail('El salón ya está ocupado por un Evento propio de Sound Heritage en esa fecha.');
+                return;
+            }
+
+            $reservationQuery = Reservation::where('venue_id', $venueId)
+                ->whereDate('date', $value)
+                ->where('status', 'Confirmada');
+
+            // Al editar una reserva ya confirmada se excluye su propio ID para que no detecte un falso choque consigo misma
+            if ($record) {
+                $reservationQuery->where('id', '!=', $record->id);
+            }
+
+            if ($reservationQuery->exists()) {
+                $fail('Ya existe otra reserva confirmada para el salón en esa fecha.');
+            }
+        };
+    }
+
+    // Genera el reporte PDF de reservas de sala respetando los filtros y el orden activos en pantalla
+    private static function exportPdf($livewire)
+    {
+        $reservations = $livewire->getFilteredSortedTableQuery()
+            ->with(['customer', 'venue'])
+            ->get();
+
+        $rows = [];
+        foreach ($reservations as $reservation) {
+            $rows[] = [
+                $reservation->date,
+                $reservation->customer
+                    ? "{$reservation->customer->last_name}, {$reservation->customer->first_name}"
+                    : '-',
+                $reservation->customer?->phone ?? '-',
+                $reservation->type,
+                $reservation->venue?->name ?? 'Salón Principal',
+                $reservation->status,
+            ];
+        }
+
+        $pdf = Pdf::loadView('reports.pdf-generic', [
+            'title'             => 'Reporte de Reservas de Sala (Alquiler a Terceros)',
+            'filtros_aplicados' => collect($livewire->getTable()->getFilterIndicators())
+                ->map(fn ($indicator) => strip_tags((string) $indicator->getLabel()))
+                ->implode(' | ') ?: 'Ninguno (Todos los registros)',
+            'summary' => [
+                'Total Solicitudes' => $reservations->count(),
+                'Confirmadas'       => $reservations->where('status', 'Confirmada')->count(),
+                'Pendientes'        => $reservations->where('status', 'Pendiente')->count(),
+                'Canceladas'        => $reservations->where('status', 'Cancelada')->count(),
+            ],
+            'headers' => ['Fecha Reservada', 'Cliente', 'Teléfono', 'Motivo / Uso', 'Salón', 'Estado'],
+            'rows'    => $rows,
+        ])->setPaper('a4', 'landscape');
+
+        // Se usa streamDownload porque Livewire funciona por AJAX y no permite descargas directas tradicionales
+        return response()->streamDownload(
+            fn () => print($pdf->output()),
+            'reporte-reservas-' . date('Ymd-His') . '.pdf'
+        );
+    }
+
+    // =========================================================================
+    // 3. FORMULARIO DE SOLICITUD DE RESERVA (CREATE / EDIT)
     // =========================================================================
     public static function form(Form $form): Form
     {
@@ -46,10 +152,14 @@ class ReservationResource extends Resource
                         ->relationship(
                             'customer',
                             'last_name',
-                            modifyQueryUsing: fn (Builder $query) => $query->where('document_number', '!=', '0')->orderBy('last_name')
+                            modifyQueryUsing: fn (Builder $query) => $query
+                                ->where('document_number', '!=', '0')
+                                ->orderBy('last_name')
                         )
                         // Muestra apellido, nombre y DNI juntos para evitar confusiones entre clientes con el mismo apellido
-                        ->getOptionLabelFromRecordUsing(fn ($record) => "{$record->last_name}, {$record->first_name} (DNI: {$record->document_number})")
+                        ->getOptionLabelFromRecordUsing(
+                            fn ($record) => "{$record->last_name}, {$record->first_name} (DNI: {$record->document_number})"
+                        )
                         ->searchable(['first_name', 'last_name', 'document_number'])
                         ->preload()
                         ->required(),
@@ -64,52 +174,20 @@ class ReservationResource extends Resource
 
                     Forms\Components\Select::make('type')
                         ->label('Motivo / Uso del Salón')
-                        ->options([
-                            'Ensayo de Banda'          => 'Ensayo de Banda',
-                            'Ensayo General'           => 'Ensayo General',
-                            'Grabación Acústica'       => 'Grabación Acústica',
-                            'Lanzamiento de Videoclip' => 'Lanzamiento de Videoclip',
-                            'Masterclass Externa'      => 'Masterclass Externa',
-                            'Evento Privado'           => 'Evento Privado',
-                        ])
+                        ->options(self::getReservationTypeOptions())
                         ->required(),
 
                     Forms\Components\DatePicker::make('date')
                         ->label('Fecha Solicitada')
                         ->required()
-                        // Se valida contra dos tablas (events y reservations) porque el mismo salón físico se comparte entre eventos propios y alquileres
                         ->rules([
-                            fn (Get $get, ?Model $record): Closure => function (string $attribute, $value, Closure $fail) use ($get, $record) {
-                                $venueId = $get('venue_id') ?: 1;
-
-                                if (Event::where('venue_id', $venueId)->whereDate('date', $value)->exists()) {
-                                    $fail('El salón ya está ocupado por un Evento propio de Sound Heritage en esa fecha.');
-                                    return;
-                                }
-
-                                $consultaReserva = Reservation::where('venue_id', $venueId)
-                                    ->whereDate('date', $value)
-                                    ->where('status', 'Confirmada');
-
-                                // Al editar una reserva ya confirmada se excluye su propio ID para que no detecte un falso choque consigo misma
-                                if ($record) {
-                                    $consultaReserva->where('id', '!=', $record->id);
-                                }
-
-                                if ($consultaReserva->exists()) {
-                                    $fail('Ya existe otra reserva confirmada para el salón en esa fecha.');
-                                }
-                            },
+                            fn (Get $get, ?Model $record): Closure => self::validateVenueAvailability($get, $record),
                         ]),
 
                     // Nace como 'Pendiente' para registrar el pedido sin bloquear la fecha en el calendario hasta que el cliente abone la seña
                     Forms\Components\Select::make('status')
                         ->label('Estado de la Solicitud')
-                        ->options([
-                            'Pendiente'  => 'Pendiente de Aprobación',
-                            'Confirmada' => 'Confirmada',
-                            'Cancelada'  => 'Cancelada',
-                        ])
+                        ->options(self::getReservationStatusOptions())
                         ->default('Pendiente')
                         ->required(),
                 ])->columns(2),
@@ -117,7 +195,7 @@ class ReservationResource extends Resource
     }
 
     // =========================================================================
-    // 3. TABLA PRINCIPAL DE RESERVAS DE SALA
+    // 4. TABLA PRINCIPAL DE RESERVAS DE SALA
     // =========================================================================
     public static function table(Table $table): Table
     {
@@ -126,7 +204,10 @@ class ReservationResource extends Resource
             // A) COLUMNAS VISIBLES EN EL LISTADO
             // -----------------------------------------------------------------
             ->columns([
-                Tables\Columns\TextColumn::make('date')->label('Fecha Reservada')->date('d/m/Y')->sortable(),
+                Tables\Columns\TextColumn::make('date')
+                    ->label('Fecha Reservada')
+                    ->date('d/m/Y')
+                    ->sortable(),
 
                 // Incluye el teléfono como subtítulo para poder contactar rápido al solicitante sin tener que abrir el formulario
                 Tables\Columns\TextColumn::make('customer.last_name')
@@ -136,8 +217,14 @@ class ReservationResource extends Resource
                     ->searchable(['first_name', 'last_name', 'document_number'])
                     ->sortable(),
 
-                Tables\Columns\TextColumn::make('type')->label('Uso / Motivo')->badge()->color('info'),
-                Tables\Columns\TextColumn::make('venue.name')->label('Salón')->toggleable(),
+                Tables\Columns\TextColumn::make('type')
+                    ->label('Uso / Motivo')
+                    ->badge()
+                    ->color('info'),
+
+                Tables\Columns\TextColumn::make('venue.name')
+                    ->label('Salón')
+                    ->toggleable(),
 
                 Tables\Columns\TextColumn::make('status')
                     ->label('Estado')
@@ -158,22 +245,11 @@ class ReservationResource extends Resource
             ->filters([
                 Tables\Filters\SelectFilter::make('status')
                     ->label('Estado')
-                    ->options([
-                        'Pendiente'  => 'Pendientes de Aprobación',
-                        'Confirmada' => 'Confirmadas',
-                        'Cancelada'  => 'Canceladas',
-                    ]),
+                    ->options(self::getReservationStatusOptions()),
 
                 Tables\Filters\SelectFilter::make('type')
                     ->label('Motivo / Uso')
-                    ->options([
-                        'Ensayo de Banda'          => 'Ensayo de Banda',
-                        'Ensayo General'           => 'Ensayo General',
-                        'Grabación Acústica'       => 'Grabación Acústica',
-                        'Lanzamiento de Videoclip' => 'Lanzamiento de Videoclip',
-                        'Masterclass Externa'      => 'Masterclass Externa',
-                        'Evento Privado'           => 'Evento Privado',
-                    ]),
+                    ->options(self::getReservationTypeOptions()),
 
                 Tables\Filters\SelectFilter::make('customer_id')
                     ->label('Cliente Solicitante')
@@ -184,8 +260,11 @@ class ReservationResource extends Resource
                 // Se usa Filter personalizado porque el rango requiere comparar '>=' y '<=' sobre la misma columna date
                 Tables\Filters\Filter::make('date')
                     ->form([
-                        Forms\Components\DatePicker::make('desde')->label('Fecha Desde'),
-                        Forms\Components\DatePicker::make('hasta')->label('Fecha Hasta'),
+                        Forms\Components\DatePicker::make('desde')
+                            ->label('Fecha Desde'),
+
+                        Forms\Components\DatePicker::make('hasta')
+                            ->label('Fecha Hasta'),
                     ])
                     ->columns(2)
                     ->columnSpan(2)
@@ -209,40 +288,7 @@ class ReservationResource extends Resource
                     ->label('Exportar PDF')
                     ->icon('heroicon-m-document-arrow-down')
                     ->color('primary')
-                    ->action(function ($livewire) {
-                        // Se usa getFilteredSortedTableQuery() para que el PDF respete los filtros y el orden aplicados en pantalla
-                        $reservations = $livewire->getFilteredSortedTableQuery()->with(['customer', 'venue'])->get();
-
-                        $rows = [];
-                        foreach ($reservations as $reservation) {
-                            $rows[] = [
-                                $reservation->date,
-                                $reservation->customer ? "{$reservation->customer->last_name}, {$reservation->customer->first_name}" : '-',
-                                $reservation->customer?->phone ?? '-',
-                                $reservation->type,
-                                $reservation->venue?->name ?? 'Salón Principal',
-                                $reservation->status,
-                            ];
-                        }
-
-                        $pdf = Pdf::loadView('reports.pdf-generic', [
-                            'title'             => 'Reporte de Reservas de Sala (Alquiler a Terceros)',
-                            'filtros_aplicados' => collect($livewire->getTable()->getFilterIndicators())
-                                ->map(fn ($indicator) => strip_tags((string) $indicator->getLabel()))
-                                ->implode(' | ') ?: 'Ninguno (Todos los registros)',
-                            'summary' => [
-                                'Total Solicitudes' => $reservations->count(),
-                                'Confirmadas'       => $reservations->where('status', 'Confirmada')->count(),
-                                'Pendientes'        => $reservations->where('status', 'Pendiente')->count(),
-                                'Canceladas'        => $reservations->where('status', 'Cancelada')->count(),
-                            ],
-                            'headers' => ['Fecha Reservada', 'Cliente', 'Teléfono', 'Motivo / Uso', 'Salón', 'Estado'],
-                            'rows'    => $rows,
-                        ])->setPaper('a4', 'landscape');
-
-                        // Se usa streamDownload porque Livewire funciona por AJAX y no permite descargas directas tradicionales
-                        return response()->streamDownload(fn () => print($pdf->output()), 'reporte-reservas-' . date('Ymd-His') . '.pdf');
-                    }),
+                    ->action(fn ($livewire) => self::exportPdf($livewire)),
             ])
 
             // -----------------------------------------------------------------
@@ -260,7 +306,11 @@ class ReservationResource extends Resource
                     ->modalDescription('¿Confirmás que el salón está disponible y el cliente abonó la seña?')
                     ->action(function (Reservation $record) {
                         $record->update(['status' => 'Confirmada']);
-                        Notification::make()->title('Reserva confirmada con éxito')->success()->send();
+
+                        Notification::make()
+                            ->title('Reserva confirmada con éxito')
+                            ->success()
+                            ->send();
                     }),
 
                 // Cambia el estado a 'Cancelada' para liberar la fecha en el calendario sin borrar el registro histórico de la solicitud
@@ -272,7 +322,11 @@ class ReservationResource extends Resource
                     ->requiresConfirmation()
                     ->action(function (Reservation $record) {
                         $record->update(['status' => 'Cancelada']);
-                        Notification::make()->title('Reserva cancelada')->warning()->send();
+
+                        Notification::make()
+                            ->title('Reserva cancelada')
+                            ->warning()
+                            ->send();
                     }),
 
                 Tables\Actions\EditAction::make(),
@@ -280,7 +334,7 @@ class ReservationResource extends Resource
     }
 
     // =========================================================================
-    // 4. RUTAS DE LAS PÁGINAS DEL RECURSO
+    // 5. RUTAS DE LAS PÁGINAS DEL RECURSO
     // =========================================================================
     public static function getPages(): array
     {

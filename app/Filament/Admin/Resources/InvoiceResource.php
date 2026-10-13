@@ -3,11 +3,14 @@
 namespace App\Filament\Admin\Resources;
 
 use App\Filament\Admin\Resources\InvoiceResource\Pages;
+use App\Models\City;
 use App\Models\Customer;
 use App\Models\Employee;
+use App\Models\EmployeeCategory;
 use App\Models\Invoice;
 use App\Models\PaymentMethod;
 use App\Models\Product;
+use App\Models\Store;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Filament\Forms;
 use Filament\Forms\Form;
@@ -22,7 +25,6 @@ use Illuminate\Database\Eloquent\SoftDeletingScope;
 
 class InvoiceResource extends Resource
 {
-
     // =========================================================================
     // 1. CONFIGURACIÓN DEL MENÚ Y MODELO
     // Se agrupa en 'Tienda' con orden 2 para que quede justo debajo de Productos.
@@ -36,8 +38,36 @@ class InvoiceResource extends Resource
     protected static ?string $pluralModelLabel = 'Facturas y Ventas';
 
     // =========================================================================
-    // 2. FUNCIONES AUXILIARES (CÁLCULO EN VIVO Y TICKET PDF)
+    // 2. FUNCIONES AUXILIARES (CAJERO EN SESIÓN, CÁLCULO EN VIVO Y REPORTES PDF)
     // =========================================================================
+
+    // Obtiene el empleado vinculado a la cuenta logueada (Vendedor o Admin); si el Admin aún no tiene legajo en employees, lo vincula automáticamente
+    public static function getCurrentEmployee(): ?Employee
+    {
+        $user = auth()->user();
+        if (! $user) {
+            return Employee::first();
+        }
+
+        $employee = Employee::where('user_id', $user->id)->first();
+        if ($employee) {
+            return $employee;
+        }
+
+        $customer = $user->customer;
+        $parts    = explode(' ', trim($user->name), 2);
+
+        return Employee::create([
+            'user_id'              => $user->id,
+            'document_number'      => $customer?->document_number ?: ('990000' . $user->id),
+            'first_name'           => $customer?->first_name ?: ($parts[0] ?? $user->name),
+            'last_name'            => $customer?->last_name ?: ($parts[1] ?? 'Administrador'),
+            'address'              => $customer?->address ?: 'Sede Central',
+            'phone'                => $customer?->phone ?: '-',
+            'city_id'              => $customer?->city_id ?: (City::first()?->id ?? 1),
+            'employee_category_id' => EmployeeCategory::first()?->id ?? 1,
+        ]);
+    }
 
     // Se usa '$get("invoiceDetails")' y '$get("../../invoiceDetails")' porque puede dispararse desde el Repeater padre o desde un input hijo
     public static function calculateTotal(Forms\Get $get, Forms\Set $set): void
@@ -71,10 +101,52 @@ class InvoiceResource extends Resource
         return response()->streamDownload(fn () => print($pdf->output()), $filename);
     }
 
-    // Se desactiva SoftDeletingScope para que las facturas anuladas no desaparezcan del historial contable y puedan auditarse
+    // Genera el reporte PDF general de facturación respetando los filtros activos en pantalla
+    public static function exportPdf($livewire)
+    {
+        $invoices       = $livewire->getFilteredSortedTableQuery()->get();
+        // Se separan las emitidas para que el total recaudado no sume dinero de facturas anuladas
+        $activeInvoices = $invoices->whereNull('deleted_at');
+
+        $rows = [];
+        foreach ($invoices as $invoice) {
+            $paymentMethods = $invoice->paymentDetails->pluck('paymentMethod.name')->implode(', ');
+
+            $rows[] = [
+                $invoice->invoice_type . ' ' . $invoice->point_of_sale . '-' . $invoice->receipt_number,
+                $invoice->issue_date,
+                $invoice->customer->last_name . ' ' . $invoice->customer->first_name,
+                $invoice->employee->last_name . ' ' . $invoice->employee->first_name,
+                $paymentMethods,
+                '$' . number_format((float) $invoice->total, 2, ',', '.'),
+                $invoice->deleted_at ? 'Anulada' : 'Emitida',
+            ];
+        }
+
+        $pdf = Pdf::loadView('reports.pdf-generic', [
+            'title'             => 'Reporte de Facturación y Ventas',
+            'filtros_aplicados' => collect($livewire->getTable()->getFilterIndicators())
+                ->map(fn ($indicator) => strip_tags((string) $indicator->getLabel()))
+                ->implode(' | ') ?: 'Ninguno (Todos los registros)',
+            'summary' => [
+                'Comprobantes'    => $invoices->count(),
+                'Emitidas'        => $activeInvoices->count(),
+                'Anuladas'        => $invoices->whereNotNull('deleted_at')->count(),
+                'Total Facturado' => '$' . number_format((float) $activeInvoices->sum('total'), 2, ',', '.'),
+            ],
+            'headers' => ['Comprobante', 'Fecha', 'Cliente', 'Vendedor', 'Medio de Pago', 'Total ($)', 'Estado'],
+            'rows'    => $rows,
+        ])->setPaper('a4', 'landscape');
+
+        return response()->streamDownload(fn () => print($pdf->output()), 'reporte-ventas-' . date('Ymd-His') . '.pdf');
+    }
+
+    // Se precargan relaciones para evitar consultas N+1 y se desactiva SoftDeletingScope para auditar facturas anuladas
     public static function getEloquentQuery(): Builder
     {
-        return parent::getEloquentQuery()->withoutGlobalScopes([SoftDeletingScope::class]);
+        return parent::getEloquentQuery()
+            ->with(['customer', 'employee', 'paymentDetails.paymentMethod'])
+            ->withoutGlobalScopes([SoftDeletingScope::class]);
     }
 
     // =========================================================================
@@ -109,7 +181,8 @@ class InvoiceResource extends Resource
                                         Forms\Components\Select::make('category_filter')
                                             ->label('Categoría / Rubro')
                                             ->options(ProductResource::getProductTypeOptions())
-                                            ->placeholder('Todas las categorías')
+                                            ->placeholder('Seleccioná una categoría')
+                                            ->required()
                                             ->live()
                                             ->dehydrated(false)
                                             ->afterStateUpdated(fn (Forms\Set $set) => $set('product_id', null))
@@ -117,6 +190,7 @@ class InvoiceResource extends Resource
 
                                         Forms\Components\Select::make('product_id')
                                             ->label('Producto')
+                                            ->disabled(fn (Forms\Get $get): bool => blank($get('category_filter')))
                                             // Ordena de la A a la Z, filtra por stock > 0 e incluye el ID ya elegido para que no muestre el número de ID cuando el stock queda en 0
                                             ->relationship(
                                                 'product',
@@ -196,13 +270,13 @@ class InvoiceResource extends Resource
                                     ])
                                     ->columns(12)
                                     ->defaultItems(1)
+                                    ->minItems(1)
                                     ->addActionLabel('+ Agregar otro producto'),
 
                                 Forms\Components\TextInput::make('total')
                                     ->label('TOTAL A COBRAR ($)')
-                                    ->numeric()
                                     ->prefix('$')
-                                    ->readOnly()
+                                    ->disabled()
                                     ->dehydrated()
                                     ->default('0.00')
                                     ->extraInputAttributes(['class' => 'text-xl font-bold']),
@@ -240,6 +314,7 @@ class InvoiceResource extends Resource
                                 if ($customer) {
                                     $type = ($customer->tax_condition === 'Responsable Inscripto') ? 'A' : 'B';
                                     $set('invoice_type', $type);
+                                    $set('invoice_type_label', $type === 'A' ? 'Factura A (Resp. Inscripto)' : 'Factura B (Cons. Final / Monotrib.)');
                                 }
                             })
                             ->createOptionForm(CustomerResource::getQuickCreateFormSchema())
@@ -250,42 +325,48 @@ class InvoiceResource extends Resource
                             )
                             ->columnSpanFull(),
 
-                                Forms\Components\Select::make('employee_id')
+                                // Carga automáticamente el cajero de la cuenta logueada (Vendedor o Admin) en gris y sin opción de cambiarlo
+                                Forms\Components\Hidden::make('employee_id')
+                                    ->default(fn () => self::getCurrentEmployee()?->id)
+                                    ->required(),
+
+                                Forms\Components\TextInput::make('employee_name')
                                     ->label('Vendedor / Cajero')
-                                    ->relationship('employee', 'last_name')
-                                    ->getOptionLabelFromRecordUsing(fn ($record) => "{$record->last_name}, {$record->first_name}")
-                                    ->searchable(['first_name', 'last_name'])
-                                    ->preload()
-                                    // Asocia por defecto al empleado vinculado al usuario en sesión para agilizar la atención
-                                    ->default(fn () => Employee::where('user_id', auth()->id())->value('id') ?? Employee::first()?->id)
-                                    ->required()
+                                    ->default(function (): string {
+                                        $employee = self::getCurrentEmployee();
+                                        return $employee
+                                            ? "{$employee->last_name}, {$employee->first_name}"
+                                            : (auth()->user()?->name ?? 'Administrador');
+                                    })
+                                    ->disabled()
+                                    ->dehydrated(false)
                                     ->columnSpanFull(),
 
-                                // disabled + dehydrated: en HTML los campos disabled no se envían en el POST; dehydrated() fuerza su guardado
-                                Forms\Components\Select::make('invoice_type')
-                                    ->label('Tipo de Factura')
-                                    ->options([
-                                        'A' => 'Factura A (Resp. Inscripto)',
-                                        'B' => 'Factura B (Cons. Final / Monotrib.)',
-                                        'C' => 'Factura C',
-                                    ])
+                                // Campo oculto que guarda el código real ('A' o 'B') en la BD + TextInput gris sin flecha desplegable
+                                Forms\Components\Hidden::make('invoice_type')
                                     ->default('B')
-                                    ->disabled()
-                                    ->dehydrated()
                                     ->required(),
 
-                                Forms\Components\Select::make('store_id')
-                                    ->label('Sucursal')
-                                    ->relationship('store', 'company_name')
-                                    ->default(1)
+                                Forms\Components\TextInput::make('invoice_type_label')
+                                    ->label('Tipo de Factura')
+                                    ->default('Factura B (Cons. Final / Monotrib.)')
                                     ->disabled()
-                                    ->dehydrated()
+                                    ->dehydrated(false),
+
+                                Forms\Components\Hidden::make('store_id')
+                                    ->default(1)
                                     ->required(),
+
+                                Forms\Components\TextInput::make('store_name')
+                                    ->label('Sucursal')
+                                    ->default(fn () => Store::find(1)?->company_name ?? 'Sound Heritage')
+                                    ->disabled()
+                                    ->dehydrated(false),
 
                                 Forms\Components\TextInput::make('point_of_sale')
                                     ->label('Punto de Venta')
                                     ->default('0001')
-                                    ->readOnly()
+                                    ->disabled()
                                     ->dehydrated()
                                     ->required(),
 
@@ -293,21 +374,25 @@ class InvoiceResource extends Resource
                                 Forms\Components\TextInput::make('receipt_number')
                                     ->label('N° de Comprobante')
                                     ->default(fn () => str_pad((string) (Invoice::withTrashed()->count() + 1), 8, '0', STR_PAD_LEFT))
-                                    ->readOnly()
+                                    ->disabled()
                                     ->dehydrated()
                                     ->required(),
 
                                 Forms\Components\DatePicker::make('issue_date')
                                     ->label('Fecha de Emisión')
                                     ->default(now())
-                                    ->readOnly()
+                                    ->native(false)
+                                    ->displayFormat('d/m/Y')
+                                    ->disabled()
                                     ->dehydrated()
                                     ->required(),
 
                                 Forms\Components\DatePicker::make('due_date')
                                     ->label('Fecha de Vencimiento')
                                     ->default(now()->addDays(10))
-                                    ->readOnly()
+                                    ->native(false)
+                                    ->displayFormat('d/m/Y')
+                                    ->disabled()
                                     ->dehydrated()
                                     ->required(),
                             ])
@@ -336,7 +421,7 @@ class InvoiceResource extends Resource
         ]);
     }
 
-       // =========================================================================
+    // =========================================================================
     // 4. VISTA DE REPORTE DEL COMPROBANTE A PANTALLA COMPLETA (INFOLIST)
     // =========================================================================
     public static function infolist(Infolist $infolist): Infolist
@@ -462,11 +547,11 @@ class InvoiceResource extends Resource
                     ->sortable(),
 
                 // Evalúa trashed() (deleted_at) para distinguir visualmente comprobantes válidos de anulados
-                Tables\Columns\TextColumn::make('deleted_at')
+                Tables\Columns\TextColumn::make('estado')
                     ->label('Estado')
                     ->badge()
-                    ->getStateUsing(fn (Invoice $record) => $record->trashed() ? 'Anulada' : 'Emitida')
-                    ->color(fn (string $state) => $state === 'Emitida' ? 'success' : 'danger'),
+                    ->state(fn (Invoice $record): string => $record->trashed() ? 'Anulada' : 'Emitida')
+                    ->color(fn (string $state): string => $state === 'Emitida' ? 'success' : 'danger'),
             ])
             ->defaultSort('issue_date', 'desc')
 
@@ -512,8 +597,10 @@ class InvoiceResource extends Resource
                 // Se usa Filter personalizado porque el rango requiere comparar '>=' y '<=' sobre la misma columna issue_date
                 Tables\Filters\Filter::make('issue_date')
                     ->form([
-                        Forms\Components\DatePicker::make('desde')->label('Fecha Desde'),
-                        Forms\Components\DatePicker::make('hasta')->label('Fecha Hasta'),
+                        Forms\Components\DatePicker::make('desde')
+                            ->label('Fecha Desde'),
+                        Forms\Components\DatePicker::make('hasta')
+                            ->label('Fecha Hasta'),
                     ])
                     ->columns(2)
                     ->query(function (Builder $query, array $data) {
@@ -528,8 +615,14 @@ class InvoiceResource extends Resource
                 // Permite acotar ventas entre un monto mínimo y un monto máximo en pesos
                 Tables\Filters\Filter::make('rango_total')
                     ->form([
-                        Forms\Components\TextInput::make('total_min')->label('Monto Mínimo ($)')->numeric()->prefix('$'),
-                        Forms\Components\TextInput::make('total_max')->label('Monto Máximo ($)')->numeric()->prefix('$'),
+                        Forms\Components\TextInput::make('total_min')
+                            ->label('Monto Mínimo ($)')
+                            ->numeric()
+                            ->prefix('$'),
+                        Forms\Components\TextInput::make('total_max')
+                            ->label('Monto Máximo ($)')
+                            ->numeric()
+                            ->prefix('$'),
                     ])
                     ->columns(2)
                     ->query(function (Builder $query, array $data) {
@@ -552,48 +645,10 @@ class InvoiceResource extends Resource
                     ->label('Exportar PDF')
                     ->icon('heroicon-m-document-arrow-down')
                     ->color('primary')
-                    ->action(function ($livewire) {
-                        // Se usa getFilteredSortedTableQuery() para que el PDF respete los filtros aplicados en pantalla
-                        $invoices       = $livewire->getFilteredSortedTableQuery()->get();
-                        // Se separan las emitidas para que el total recaudado no sume dinero de facturas anuladas
-                        $activeInvoices = $invoices->whereNull('deleted_at');
-
-                        $rows = [];
-                        foreach ($invoices as $invoice) {
-                            $paymentMethods = $invoice->paymentDetails->pluck('paymentMethod.name')->implode(', ');
-
-                            $rows[] = [
-                                $invoice->invoice_type . ' ' . $invoice->point_of_sale . '-' . $invoice->receipt_number,
-                                $invoice->issue_date,
-                                $invoice->customer->last_name . ' ' . $invoice->customer->first_name,
-                                $invoice->employee->last_name . ' ' . $invoice->employee->first_name,
-                                $paymentMethods,
-                                '$' . number_format($invoice->total, 2, ',', '.'),
-                                $invoice->deleted_at ? 'Anulada' : 'Emitida',
-                            ];
-                        }
-
-                        $pdf = Pdf::loadView('reports.pdf-generic', [
-                            'title'             => 'Reporte de Facturación y Ventas',
-                            'filtros_aplicados' => collect($livewire->getTable()->getFilterIndicators())
-                                ->map(fn ($indicator) => strip_tags((string) $indicator->getLabel()))
-                                ->implode(' | ') ?: 'Ninguno (Todos los registros)',
-                            'summary' => [
-                                'Comprobantes'    => $invoices->count(),
-                                'Emitidas'        => $activeInvoices->count(),
-                                'Anuladas'        => $invoices->whereNotNull('deleted_at')->count(),
-                                'Total Facturado' => '$' . number_format($activeInvoices->sum('total'), 2, ',', '.'),
-                            ],
-                            'headers' => ['Comprobante', 'Fecha', 'Cliente', 'Vendedor', 'Medio de Pago', 'Total ($)', 'Estado'],
-                            'rows'    => $rows,
-                        ])->setPaper('a4', 'landscape');
-
-                        // Se usa streamDownload porque Livewire funciona por AJAX y no permite descargas directas tradicionales
-                        return response()->streamDownload(fn () => print($pdf->output()), 'reporte-ventas-' . date('Ymd-His') . '.pdf');
-                    }),
+                    ->action(fn ($livewire) => self::exportPdf($livewire)),
             ])
 
-                        // -----------------------------------------------------------------
+            // -----------------------------------------------------------------
             // D) ACCIONES POR CADA FILA (TICKET, VER EN MODAL Y ANULAR)
             // -----------------------------------------------------------------
             ->actions([

@@ -2,6 +2,16 @@
 
 namespace App\Providers\Filament;
 
+use App\Filament\Admin\Resources\AttendanceResource;
+use App\Filament\Admin\Resources\CustomerResource;
+use App\Filament\Admin\Resources\EventResource;
+use App\Filament\Admin\Resources\InvoiceResource;
+use App\Filament\Admin\Resources\ProductResource;
+use App\Filament\Admin\Resources\ReservationResource;
+use App\Filament\Admin\Widgets\AlertasTiendaTable;
+use App\Filament\Admin\Widgets\TiendaStatsOverview;
+use App\Filament\Admin\Widgets\TopProductosIngresosChart;
+use App\Filament\Admin\Widgets\VentasInteranualesChart;
 use App\Models\Attendance;
 use App\Models\Customer;
 use App\Models\Event;
@@ -12,23 +22,20 @@ use Filament\Http\Middleware\Authenticate;
 use Filament\Http\Middleware\AuthenticateSession;
 use Filament\Http\Middleware\DisableBladeIconComponents;
 use Filament\Http\Middleware\DispatchServingFilamentEvent;
-use Filament\Navigation\MenuItem;
 use Filament\Pages;
 use Filament\Panel;
 use Filament\PanelProvider;
-use Filament\Support\Colors\Color;
-use Filament\View\PanelsRenderHook;
 use Illuminate\Cookie\Middleware\AddQueuedCookiesToResponse;
 use Illuminate\Cookie\Middleware\EncryptCookies;
 use Illuminate\Foundation\Http\Middleware\VerifyCsrfToken;
 use Illuminate\Routing\Middleware\SubstituteBindings;
 use Illuminate\Session\Middleware\StartSession;
 use Illuminate\Support\Facades\Gate;
-use Illuminate\Support\HtmlString;
 use Illuminate\View\Middleware\ShareErrorsFromSession;
 
 class VendedorPanelProvider extends PanelProvider
 {
+    // Define los permisos granulares del rol Vendedor sobre cada modelo del sistema
     public function boot(): void
     {
         Gate::before(function ($user, string $ability, array $arguments = []) {
@@ -65,6 +72,7 @@ class VendedorPanelProvider extends PanelProvider
         });
     }
 
+    // Configura el panel Comercial (/vendedor) con acceso acotado a facturación, clientes y agenda cultural
     public function panel(Panel $panel): Panel
     {
         $widgetsFile = app_path('Filament/Admin/Widgets/TiendaDashboardWidgets.php');
@@ -76,53 +84,26 @@ class VendedorPanelProvider extends PanelProvider
             ->id('vendedor')
             ->path('vendedor')
             ->brandName('Sound Heritage - Ventas')
-            ->brandLogo(asset('img/Logo_SH.png'))
-            ->darkModeBrandLogo(asset('img/Logo_blanco_sh.png'))
-            ->brandLogoHeight('3.2rem')
-            ->font('Figtree')
-            ->colors([
-                'primary'   => Color::hex('#b48d56'), // Dorado corporativo
-                'secondary' => Color::hex('#0b1031'), // Azul marino corporativo
-                'gray'      => Color::Slate,
-                'info'      => Color::Blue,
-                'success'   => Color::Emerald,
-                'warning'   => Color::Amber,
-                'danger'    => Color::Rose,
-            ])
             ->navigationGroups([
                 'Tienda',
                 'Eventos y Sala',
             ])
-            ->userMenuItems([
-                MenuItem::make()
-                    ->label('Volver a la Tienda')
-                    ->url('/')
-                    ->icon('heroicon-o-building-storefront'),
-            ])
-            ->renderHook(
-                PanelsRenderHook::USER_MENU_BEFORE,
-                fn (): \Illuminate\Contracts\View\View => view('filament.theme-toggle')
-            )
-            ->renderHook(
-                PanelsRenderHook::HEAD_END,
-                fn (): HtmlString => new HtmlString(view('filament.custom-styles')->render())
-            )
             ->pages([
                 Pages\Dashboard::class,
             ])
             ->resources([
-                \App\Filament\Admin\Resources\InvoiceResource::class,
-                \App\Filament\Admin\Resources\CustomerResource::class,
-                \App\Filament\Admin\Resources\ProductResource::class,
-                \App\Filament\Admin\Resources\ReservationResource::class,
-                \App\Filament\Admin\Resources\EventResource::class,
-                \App\Filament\Admin\Resources\AttendanceResource::class,
+                InvoiceResource::class,
+                CustomerResource::class,
+                ProductResource::class,
+                ReservationResource::class,
+                EventResource::class,
+                AttendanceResource::class,
             ])
             ->widgets([
-                \App\Filament\Admin\Widgets\TiendaStatsOverview::class,
-                \App\Filament\Admin\Widgets\VentasInteranualesChart::class,
-                \App\Filament\Admin\Widgets\TopProductosIngresosChart::class,
-                \App\Filament\Admin\Widgets\AlertasTiendaTable::class,
+                TiendaStatsOverview::class,
+                VentasInteranualesChart::class,
+                TopProductosIngresosChart::class,
+                AlertasTiendaTable::class,
             ])
             ->middleware([
                 EncryptCookies::class,

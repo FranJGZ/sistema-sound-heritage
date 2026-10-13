@@ -6,10 +6,11 @@ use App\Filament\Admin\Resources\AttendanceResource\Pages;
 use App\Models\Attendance;
 use App\Models\Event;
 use Barryvdh\DomPDF\Facade\Pdf;
+use Carbon\Carbon;
+use Closure;
 use Filament\Forms;
 use Filament\Forms\Form;
 use Filament\Forms\Get;
-use Filament\Notifications\Notification;
 use Filament\Resources\Resource;
 use Filament\Support\Enums\MaxWidth;
 use Filament\Tables;
@@ -29,6 +30,7 @@ class AttendanceResource extends Resource
     protected static ?string $modelLabel = 'Inscripción';
     protected static ?string $pluralModelLabel = 'Inscripciones a Eventos';
 
+    // Precarga el evento con su salón y el cliente asistente para evitar consultas N+1 en la tabla
     public static function getEloquentQuery(): Builder
     {
         return parent::getEloquentQuery()
@@ -36,7 +38,104 @@ class AttendanceResource extends Resource
     }
 
     // =========================================================================
-    // 2. FORMULARIO DE INSCRIPCIÓN (MODAL O PÁGINA)
+    // 2. MÉTODOS AUXILIARES (ETIQUETAS, VALIDACIONES Y EXPORTACIÓN PDF)
+    // =========================================================================
+
+    // Construye la etiqueta del selector de eventos mostrando la fecha y los cupos libres en tiempo real
+    private static function formatEventOptionLabel(Event $record): string
+    {
+        $occupiedSpots = $record->attendances_count ?? $record->attendances()->count();
+        $availableSpots = max(0, $record->capacity - $occupiedSpots);
+        $formattedDate = Carbon::parse($record->date)->format('d/m/Y');
+
+        return "{$record->name} ({$formattedDate}) — Cupos restantes: {$availableSpots} de {$record->capacity}";
+    }
+
+    // Impide inscribir asistentes cuando el evento ya alcanzó su capacidad máxima habilitada
+    private static function validateEventCapacity(?Attendance $record): Closure
+    {
+        return function (string $attribute, $value, Closure $fail) use ($record) {
+            $event = Event::withCount('attendances')->find($value);
+            if (! $event) {
+                return;
+            }
+
+            $occupiedSpots = $event->attendances_count;
+            if ($record && $record->event_id == $value) {
+                $occupiedSpots--;
+            }
+
+            if ($occupiedSpots >= $event->capacity) {
+                $fail("El evento seleccionado ya completó su capacidad máxima de {$event->capacity} asistentes.");
+            }
+        };
+    }
+
+    // Impide que un mismo cliente sea inscripto dos veces en el mismo evento cultural
+    private static function validateUniqueAttendance(Get $get, ?Attendance $record): Closure
+    {
+        return function (string $attribute, $value, Closure $fail) use ($get, $record) {
+            $eventId = $get('event_id');
+            if (! $eventId || ! $value) {
+                return;
+            }
+
+            $alreadyRegistered = Attendance::where('event_id', $eventId)
+                ->where('customer_id', $value)
+                ->when($record, fn (Builder $query) => $query->where('id', '!=', $record->id))
+                ->exists();
+
+            if ($alreadyRegistered) {
+                $fail('Este cliente ya se encuentra inscripto en este evento.');
+            }
+        };
+    }
+
+    // Genera la lista de puerta en PDF respetando los filtros y el orden activos en pantalla
+    private static function exportPdf($livewire)
+    {
+        $attendances = $livewire->getFilteredSortedTableQuery()
+            ->with(['customer', 'event'])
+            ->get();
+
+        $rows = [];
+        foreach ($attendances as $index => $attendance) {
+            $rows[] = [
+                '#' . ($index + 1),
+                $attendance->customer
+                    ? "{$attendance->customer->last_name}, {$attendance->customer->first_name}"
+                    : '-',
+                $attendance->customer?->document_number ?? '-',
+                $attendance->customer?->phone ?? '-',
+                $attendance->customer?->email ?? '-',
+                $attendance->event?->name ?? '-',
+                $attendance->event
+                    ? Carbon::parse($attendance->event->date)->format('d/m/Y')
+                    : '-',
+            ];
+        }
+
+        $pdf = Pdf::loadView('reports.pdf-generic', [
+            'title'             => 'Control de Asistencias y Lista de Entrada a Eventos',
+            'filtros_aplicados' => collect($livewire->getTable()->getFilterIndicators())
+                ->map(fn ($indicator) => strip_tags((string) $indicator->getLabel()))
+                ->implode(' | ') ?: 'Ninguno (Todos los registros)',
+            'summary' => [
+                'Total Asistentes Listados' => $attendances->count(),
+            ],
+            'headers' => ['#', 'Cliente', 'DNI', 'Teléfono', 'Email', 'Evento Cultural', 'Fecha Evento'],
+            'rows'    => $rows,
+        ])->setPaper('a4', 'landscape');
+
+        // Se usa streamDownload porque Livewire funciona por AJAX y no permite descargas directas tradicionales
+        return response()->streamDownload(
+            fn () => print($pdf->output()),
+            'lista-asistentes-' . date('Ymd-His') . '.pdf'
+        );
+    }
+
+    // =========================================================================
+    // 3. FORMULARIO DE INSCRIPCIÓN (CREATE)
     // =========================================================================
     public static function form(Form $form): Form
     {
@@ -51,31 +150,17 @@ class AttendanceResource extends Resource
                             ->relationship(
                                 'event',
                                 'name',
-                                modifyQueryUsing: fn (Builder $query) => $query->withCount('attendances')->orderBy('date', 'desc')
+                                modifyQueryUsing: fn (Builder $query) => $query
+                                    ->withCount('attendances')
+                                    ->orderBy('date', 'desc')
                             )
-                            ->getOptionLabelFromRecordUsing(function (Event $record): string {
-                                $ocupados = $record->attendances_count ?? $record->attendances()->count();
-                                $disponibles = max(0, $record->capacity - $ocupados);
-                                $fecha = \Carbon\Carbon::parse($record->date)->format('d/m/Y');
-                                return "{$record->name} ({$fecha}) — Cupos restantes: {$disponibles} de {$record->capacity}";
-                            })
+                            ->getOptionLabelFromRecordUsing(fn (Event $record): string => self::formatEventOptionLabel($record))
                             ->searchable()
                             ->preload()
                             ->required()
                             ->live()
                             ->rules([
-                                fn (Get $get, ?Attendance $record) => function (string $attribute, $value, \Closure $fail) use ($record) {
-                                    $event = Event::withCount('attendances')->find($value);
-                                    if ($event) {
-                                        $ocupados = $event->attendances_count;
-                                        if ($record && $record->event_id == $value) {
-                                            $ocupados--;
-                                        }
-                                        if ($ocupados >= $event->capacity) {
-                                            $fail("El evento seleccionado ya completó su capacidad máxima de {$event->capacity} asistentes.");
-                                        }
-                                    }
-                                },
+                                fn (?Attendance $record): Closure => self::validateEventCapacity($record),
                             ])
                             ->columnSpanFull(),
 
@@ -84,9 +169,13 @@ class AttendanceResource extends Resource
                             ->relationship(
                                 'customer',
                                 'last_name',
-                                modifyQueryUsing: fn (Builder $query) => $query->where('document_number', '!=', '0')->orderBy('last_name')
+                                modifyQueryUsing: fn (Builder $query) => $query
+                                    ->where('document_number', '!=', '0')
+                                    ->orderBy('last_name')
                             )
-                            ->getOptionLabelFromRecordUsing(fn ($record) => "{$record->last_name}, {$record->first_name} (DNI: {$record->document_number})")
+                            ->getOptionLabelFromRecordUsing(
+                                fn ($record) => "{$record->last_name}, {$record->first_name} (DNI: {$record->document_number})"
+                            )
                             ->searchable(['first_name', 'last_name', 'document_number'])
                             ->preload()
                             ->required()
@@ -97,18 +186,7 @@ class AttendanceResource extends Resource
                                     ->modalWidth('3xl')
                             )
                             ->rules([
-                                fn (Get $get, ?Attendance $record) => function (string $attribute, $value, \Closure $fail) use ($get, $record) {
-                                    $eventId = $get('event_id');
-                                    if ($eventId && $value) {
-                                        $exists = Attendance::where('event_id', $eventId)
-                                            ->where('customer_id', $value)
-                                            ->when($record, fn ($q) => $q->where('id', '!=', $record->id))
-                                            ->exists();
-                                        if ($exists) {
-                                            $fail('Este cliente ya se encuentra inscripto en este evento.');
-                                        }
-                                    }
-                                },
+                                fn (Get $get, ?Attendance $record): Closure => self::validateUniqueAttendance($get, $record),
                             ]),
 
                         Forms\Components\DatePicker::make('registration_date')
@@ -121,11 +199,14 @@ class AttendanceResource extends Resource
     }
 
     // =========================================================================
-    // 3. TABLA DE INSCRIPCIONES
+    // 4. TABLA PRINCIPAL DE INSCRIPCIONES
     // =========================================================================
     public static function table(Table $table): Table
     {
         return $table
+            // -----------------------------------------------------------------
+            // A) COLUMNAS VISIBLES EN EL LISTADO
+            // -----------------------------------------------------------------
             ->columns([
                 Tables\Columns\TextColumn::make('id')
                     ->label('N°')
@@ -134,14 +215,26 @@ class AttendanceResource extends Resource
 
                 Tables\Columns\TextColumn::make('event.name')
                     ->label('Evento')
-                    ->description(fn (Attendance $record) => $record->event ? 'Fecha: ' . \Carbon\Carbon::parse($record->event->date)->format('d/m/Y') : '')
+                    ->description(
+                        fn (Attendance $record) => $record->event
+                            ? 'Fecha: ' . Carbon::parse($record->event->date)->format('d/m/Y')
+                            : ''
+                    )
                     ->searchable()
                     ->sortable(),
 
                 Tables\Columns\TextColumn::make('customer.last_name')
                     ->label('Cliente Asistente')
-                    ->formatStateUsing(fn (Attendance $record) => $record->customer ? "{$record->customer->last_name}, {$record->customer->first_name}" : '-')
-                    ->description(fn (Attendance $record) => $record->customer ? "DNI: {$record->customer->document_number}" : '')
+                    ->formatStateUsing(
+                        fn (Attendance $record) => $record->customer
+                            ? "{$record->customer->last_name}, {$record->customer->first_name}"
+                            : '-'
+                    )
+                    ->description(
+                        fn (Attendance $record) => $record->customer
+                            ? "DNI: {$record->customer->document_number}"
+                            : ''
+                    )
                     ->searchable(['first_name', 'last_name', 'document_number'])
                     ->sortable(),
 
@@ -155,6 +248,10 @@ class AttendanceResource extends Resource
                     ->sortable(),
             ])
             ->defaultSort('id', 'desc')
+
+            // -----------------------------------------------------------------
+            // B) FILTROS DE BÚSQUEDA
+            // -----------------------------------------------------------------
             ->filters([
                 Tables\Filters\SelectFilter::make('event_id')
                     ->label('Filtrar por Evento')
@@ -164,8 +261,11 @@ class AttendanceResource extends Resource
 
                 Tables\Filters\Filter::make('registration_date')
                     ->form([
-                        Forms\Components\DatePicker::make('desde')->label('Inscripto Desde'),
-                        Forms\Components\DatePicker::make('hasta')->label('Inscripto Hasta'),
+                        Forms\Components\DatePicker::make('desde')
+                            ->label('Inscripto Desde'),
+
+                        Forms\Components\DatePicker::make('hasta')
+                            ->label('Inscripto Hasta'),
                     ])
                     ->columns(2)
                     ->query(function (Builder $query, array $data) {
@@ -179,44 +279,21 @@ class AttendanceResource extends Resource
             ])
             ->filtersFormColumns(2)
             ->filtersFormWidth(MaxWidth::Large)
+
+            // -----------------------------------------------------------------
+            // C) EXPORTACIÓN A PDF DE LA LISTA DE PUERTA
+            // -----------------------------------------------------------------
             ->headerActions([
                 Tables\Actions\Action::make('exportar_pdf')
                     ->label('Exportar Lista de Puerta (PDF)')
                     ->icon('heroicon-m-document-arrow-down')
                     ->color('primary')
-                    ->action(function ($livewire) {
-                        $attendances = $livewire->getFilteredSortedTableQuery()
-                            ->with(['customer', 'event'])
-                            ->get();
-
-                        $rows = [];
-                        foreach ($attendances as $index => $item) {
-                            $rows[] = [
-                                '#' . ($index + 1),
-                                $item->customer ? "{$item->customer->last_name}, {$item->customer->first_name}" : '-',
-                                $item->customer?->document_number ?? '-',
-                                $item->customer?->phone ?? '-',
-                                $item->customer?->email ?? '-',
-                                $item->event?->name ?? '-',
-                                $item->event ? \Carbon\Carbon::parse($item->event->date)->format('d/m/Y') : '-',
-                            ];
-                        }
-
-                        $pdf = Pdf::loadView('reports.pdf-generic', [
-                            'title'             => 'Control de Asistencias y Lista de Entrada a Eventos',
-                            'filtros_aplicados' => collect($livewire->getTable()->getFilterIndicators())
-                                ->map(fn ($indicator) => strip_tags((string) $indicator->getLabel()))
-                                ->implode(' | ') ?: 'Ninguno (Todos los registros)',
-                            'summary' => [
-                                'Total Asistentes Listados' => $attendances->count(),
-                            ],
-                            'headers' => ['#', 'Cliente', 'DNI', 'Teléfono', 'Email', 'Evento Cultural', 'Fecha Evento'],
-                            'rows'    => $rows,
-                        ])->setPaper('a4', 'landscape');
-
-                        return response()->streamDownload(fn () => print($pdf->output()), 'lista-asistentes-' . date('Ymd-His') . '.pdf');
-                    }),
+                    ->action(fn ($livewire) => self::exportPdf($livewire)),
             ])
+
+            // -----------------------------------------------------------------
+            // D) ACCIONES POR FILA
+            // -----------------------------------------------------------------
             ->actions([
                 Tables\Actions\DeleteAction::make()
                     ->label('Cancelar Inscripción')
@@ -226,6 +303,9 @@ class AttendanceResource extends Resource
             ]);
     }
 
+    // =========================================================================
+    // 5. RUTAS DE LAS PÁGINAS DEL RECURSO
+    // =========================================================================
     public static function getPages(): array
     {
         return [
@@ -234,4 +314,3 @@ class AttendanceResource extends Resource
         ];
     }
 }
-

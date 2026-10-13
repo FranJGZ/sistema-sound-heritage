@@ -13,6 +13,7 @@ class Employee extends Model implements Auditable
     use \OwenIt\Auditing\Auditable;
 
     protected $fillable = [
+        'user_id',
         'document_number',
         'last_name',
         'first_name',

@@ -12,6 +12,13 @@ class CreateInvoice extends CreateRecord
 
     protected static bool $canCreateAnother = false;
 
+    protected function mutateFormDataBeforeCreate(array $data): array
+    {
+        $data['employee_id'] = InvoiceResource::getCurrentEmployee()?->id ?? $data['employee_id'] ?? null;
+
+        return $data;
+    }
+
     protected function getCreateFormAction(): Action
     {
         return parent::getCreateFormAction()

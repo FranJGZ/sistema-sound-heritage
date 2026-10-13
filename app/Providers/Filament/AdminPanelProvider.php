@@ -2,41 +2,32 @@
 
 namespace App\Providers\Filament;
 
+use App\Filament\Admin\Pages\Dashboard;
+use App\Filament\Admin\Widgets\AlertasTiendaTable;
+use App\Filament\Admin\Widgets\AnalisisMargenProductosChart;
+use App\Filament\Admin\Widgets\CrecimientoClientesChart;
+use App\Filament\Admin\Widgets\DistribucionMontoFacturasChart;
+use App\Filament\Admin\Widgets\SegmentacionClientesChart;
+use App\Filament\Admin\Widgets\TiendaStatsOverview;
+use App\Filament\Admin\Widgets\TopProductosIngresosChart;
+use App\Filament\Admin\Widgets\VentasInteranualesChart;
 use Filament\Http\Middleware\Authenticate;
 use Filament\Http\Middleware\AuthenticateSession;
 use Filament\Http\Middleware\DisableBladeIconComponents;
 use Filament\Http\Middleware\DispatchServingFilamentEvent;
-use Filament\Navigation\MenuItem;
 use Filament\Panel;
 use Filament\PanelProvider;
-use Filament\Support\Colors\Color;
-use Filament\View\PanelsRenderHook;
 use Illuminate\Cookie\Middleware\AddQueuedCookiesToResponse;
 use Illuminate\Cookie\Middleware\EncryptCookies;
 use Illuminate\Foundation\Http\Middleware\VerifyCsrfToken;
 use Illuminate\Routing\Middleware\SubstituteBindings;
 use Illuminate\Session\Middleware\StartSession;
 use Illuminate\Support\Facades\Gate;
-use Illuminate\Support\HtmlString;
 use Illuminate\View\Middleware\ShareErrorsFromSession;
-use Filament\Actions\Action;
-
 
 class AdminPanelProvider extends PanelProvider
 {
-    
-    protected function getHeaderActions(): array
-    {
-        return [
-            Action::make('imprimir_dashboard')
-                ->label('Exportar Reporte Gráfico (PDF)')
-                ->icon('heroicon-o-printer')
-                ->color('primary')
-                ->extraAttributes([
-                    'onclick' => 'window.print()',
-                ]),
-        ];
-    }
+    // Otorga acceso total a cualquier política o recurso cuando el usuario tiene el rol Administrador
     public function boot(): void
     {
         Gate::before(function ($user, $ability) {
@@ -44,6 +35,7 @@ class AdminPanelProvider extends PanelProvider
         });
     }
 
+    // Configura el panel principal de Administración (/admin) con todos los módulos y métricas del ERP
     public function panel(Panel $panel): Panel
     {
         $widgetsFile = app_path('Filament/Admin/Widgets/TiendaDashboardWidgets.php');
@@ -56,51 +48,25 @@ class AdminPanelProvider extends PanelProvider
             ->id('admin')
             ->path('admin')
             ->brandName('Sound Heritage')
-            ->brandLogo(asset('img/Logo_SH.png'))
-            ->brandLogoHeight('3.2rem')
-            ->font('Figtree')
-            ->colors([
-                'primary'   => Color::hex('#b48d56'), // Dorado corporativo
-                'secondary' => Color::hex('#0b1031'), // Azul marino corporativo
-                'gray'      => Color::Slate,
-                'info'      => Color::Blue,
-                'success'   => Color::Emerald,
-                'warning'   => Color::Amber,
-                'danger'    => Color::Rose,
-            ])
             ->navigationGroups([
                 'Tienda',
                 'Eventos y Sala',
                 'Administración y RRHH',
             ])
-            ->userMenuItems([
-                MenuItem::make()
-                    ->label('Volver a la Tienda')
-                    ->url('/')
-                    ->icon('heroicon-o-building-storefront'),
-            ])
-            ->renderHook(
-                PanelsRenderHook::USER_MENU_BEFORE,
-                fn (): \Illuminate\Contracts\View\View => view('filament.theme-toggle')
-            )
-            ->renderHook(
-                PanelsRenderHook::HEAD_END,
-                fn (): HtmlString => new HtmlString(view('filament.custom-styles')->render())
-            )
             ->discoverResources(in: app_path('Filament/Admin/Resources'), for: 'App\\Filament\\Admin\\Resources')
             ->discoverPages(in: app_path('Filament/Admin/Pages'), for: 'App\\Filament\\Admin\\Pages')
             ->pages([
-                \App\Filament\Admin\Pages\Dashboard::class,
+                Dashboard::class,
             ])
             ->widgets([
-                \App\Filament\Admin\Widgets\TiendaStatsOverview::class,
-                \App\Filament\Admin\Widgets\VentasInteranualesChart::class,
-                \App\Filament\Admin\Widgets\CrecimientoClientesChart::class,
-                \App\Filament\Admin\Widgets\AlertasTiendaTable::class,
-                \App\Filament\Admin\Widgets\TopProductosIngresosChart::class,
-                \App\Filament\Admin\Widgets\SegmentacionClientesChart::class,
-                \App\Filament\Admin\Widgets\DistribucionMontoFacturasChart::class,
-                \App\Filament\Admin\Widgets\AnalisisMargenProductosChart::class,
+                TiendaStatsOverview::class,
+                VentasInteranualesChart::class,
+                CrecimientoClientesChart::class,
+                AlertasTiendaTable::class,
+                TopProductosIngresosChart::class,
+                SegmentacionClientesChart::class,
+                DistribucionMontoFacturasChart::class,
+                AnalisisMargenProductosChart::class,
             ])
             ->middleware([
                 EncryptCookies::class,
