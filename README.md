@@ -1,4 +1,4 @@
-# 🎸 Sound Heritage — Plataforma Integral E-Commerce, Reservas de Salón y ERP Multi-Panel
+# Sound Heritage — Plataforma Integral E-Commerce, Reservas de Salón y ERP Multi-Panel
 
 [![Laravel 11](https://img.shields.io/badge/Laravel-11.x-FF2D20?style=flat-square&logo=laravel&logoColor=white)](https://laravel.com)
 [![PHP 8.2+](https://img.shields.io/badge/PHP-8.2%2B-777BB4?style=flat-square&logo=php&logoColor=white)](https://php.net)
@@ -9,7 +9,7 @@
 [![Mercado Pago SDK](https://img.shields.io/badge/MercadoPago-REST%20API-009EE3?style=flat-square&logo=mercadopago&logoColor=white)](https://www.mercadopago.com.ar/developers)
 [![Tests Passing](https://img.shields.io/badge/Tests-92%20Aprobados%20(100%25)-2ea44f?style=flat-square)](#-verificación-y-suite-de-pruebas-automatizadas)
 
-> **Sound Heritage** es una solución monolítica modular de alta ingeniería desarrollada sobre **Laravel 11 y PHP 8.2+**. Integra en un único ecosistema un **Storefront de comercio electrónico reactivo** para instrumentos y audio profesional, un **motor de reservas de salas acústicas y auditorio** con cálculo dinámico de tarifas y señas, un **sistema de venta de entradas con códigos QR** para recitales en vivo, y un **Triple Panel ERP en Filament v3** especializado para Mostrador/Caja, Almacén/Stock y Dirección General con conciliación bancaria en tiempo real mediante **Mercado Pago**.
+> **Sound Heritage** es una solución monolítica modular de sobre **Laravel 11 y PHP 8.2+**. Integra en un único ecosistema un **Storefront de comercio electrónico reactivo** para instrumentos y audio profesional, un **motor de reservas de salas acústicas y auditorio** con cálculo dinámico de tarifas y señas, un **sistema de venta de entradas con códigos QR** para recitales en vivo, y un **Triple Panel ERP en Filament v3** especializado para Mostrador/Caja, Almacén/Stock y Dirección General con conciliación bancaria en tiempo real mediante **Mercado Pago**.
 
 ---
 
