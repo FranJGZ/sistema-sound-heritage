@@ -2,13 +2,15 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
-use Illuminate\Database\Eloquent\Factories\HasFactory;
+use OwenIt\Auditing\Contracts\Auditable;
 
-class Purchase extends Model
+class Purchase extends Model implements Auditable
 {
     use HasFactory, SoftDeletes;
+    use \OwenIt\Auditing\Auditable;
 
     protected $fillable = [
         'purchase_date',
@@ -21,16 +23,26 @@ class Purchase extends Model
         static::deleting(function (Purchase $purchase) {
             if (! $purchase->isForceDeleting()) {
                 foreach ($purchase->purchaseDetails as $detail) {
-                    Product::where('id', $detail->product_id)
-                        ->decrement('stock', $detail->quantity);
+                    if ($detail->product_id) {
+                        $product = Product::find($detail->product_id);
+                        if ($product) {
+                            $product->stock = max(0, $product->stock - $detail->quantity);
+                            $product->save();
+                        }
+                    }
                 }
             }
         });
 
         static::restoring(function (Purchase $purchase) {
             foreach ($purchase->purchaseDetails as $detail) {
-                Product::where('id', $detail->product_id)
-                    ->increment('stock', $detail->quantity);
+                if ($detail->product_id) {
+                    $product = Product::find($detail->product_id);
+                    if ($product) {
+                        $product->stock += $detail->quantity;
+                        $product->save();
+                    }
+                }
             }
         });
     }

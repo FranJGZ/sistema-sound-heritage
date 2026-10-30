@@ -30,23 +30,33 @@ class AuthenticatedSessionController extends Controller
 
         $user = auth()->user();
 
-        // 1. El Administrador va a su panel
+        // Extrae y purga de la sesión cualquier URL previa guardada para evitar redirecciones cruzadas entre roles distintos
+        $intended = $request->session()->pull('url.intended');
+
+        // 1. El Administrador va a su panel (o a una sub-ruta válida dentro de /admin)
         if ($user->hasRole('Administrador')) {
-            return redirect()->intended('/admin');
+            $target = ($intended && str_contains($intended, '/admin')) ? $intended : '/admin';
+            return redirect($target);
         }
 
-        // 2. El Encargado de Stock va a su panel de stock
+        // 2. El Encargado de Stock va exclusivamente a su panel de stock
         if ($user->hasRole('Encargado de Stock')) {
-            return redirect()->intended('/stock');
+            $target = ($intended && str_contains($intended, '/stock')) ? $intended : '/stock';
+            return redirect($target);
         }
 
-        // 3. El Vendedor va a su panel de ventas
+        // 3. El Vendedor va exclusivamente a su panel de ventas
         if ($user->hasRole('Vendedor')) {
-            return redirect()->intended('/vendedor');
+            $target = ($intended && str_contains($intended, '/vendedor')) ? $intended : '/vendedor';
+            return redirect($target);
         }
 
-        // 4. El Cliente (o cualquier otro) va a la tienda
-        return redirect()->intended('/');
+        // 4. El Cliente (o cualquier otro) va a la tienda o su perfil, descartando rutas administrativas
+        $target = ($intended && !str_contains($intended, '/admin') && !str_contains($intended, '/stock') && !str_contains($intended, '/vendedor'))
+            ? $intended
+            : '/';
+
+        return redirect($target);
     }
 
     /**

@@ -22,3 +22,18 @@
 Homestead.json
 Homestead.yaml
 Thumbs.db
+.impeccable/
+
+# Carpeta de resguardo privado (tokens, borradores y temporales excluidos de Git)
+/_privado_no_subir/
+
+# Carpetas y configuraciones de agentes locales
+.agent/
+.agents/
+mp-doc
+
+# Documentos temporales o compilados en public y docs
+public/*.pdf
+public/*.html
+docs/*.pdf
+

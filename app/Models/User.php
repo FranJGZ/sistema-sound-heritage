@@ -76,22 +76,44 @@ class User extends Authenticatable implements Auditable, FilamentUser, MustVerif
     {
         // 1. Si posee rol 'Cliente' y aún no tiene ficha en customers:
         if ($this->hasRole('Cliente') && ! $this->customer) {
-            $existingCustomer = Customer::where('email', $this->email)
-                ->whereNull('user_id')
-                ->first();
+            $docNumber = $extraData['document_number'] ?? null;
+            $existingCustomer = null;
+
+            // Busca compras previas realizadas como invitado mediante DNI o Correo
+            if (!empty($docNumber)) {
+                $existingCustomer = Customer::where('document_number', $docNumber)
+                    ->whereNull('user_id')
+                    ->first();
+            }
+
+            if (!$existingCustomer && !empty($this->email)) {
+                $existingCustomer = Customer::where('email', $this->email)
+                    ->whereNull('user_id')
+                    ->first();
+            }
 
             if ($existingCustomer) {
-                $existingCustomer->update(['user_id' => $this->id]);
+                $updates = ['user_id' => $this->id];
+                if (empty($existingCustomer->email)) {
+                    $updates['email'] = $this->email;
+                }
+                if (!empty($docNumber) && ($existingCustomer->document_number === '0' || str_starts_with($existingCustomer->document_number, 'WEB-') || str_starts_with($existingCustomer->document_number, 'DNI-'))) {
+                    $updates['document_number'] = $docNumber;
+                }
+                if (!empty($extraData['phone']) && ($existingCustomer->phone === '-' || empty($existingCustomer->phone))) {
+                    $updates['phone'] = $extraData['phone'];
+                }
+                $existingCustomer->update($updates);
             } else {
                 $nameParts = explode(' ', trim($this->name), 2);
-                $docNumber = $extraData['document_number'] ?? ('WEB-' . str_pad((string) $this->id, 5, '0', STR_PAD_LEFT));
+                $finalDocNumber = $docNumber ?: ('WEB-' . str_pad((string) $this->id, 5, '0', STR_PAD_LEFT));
                 $phone = $extraData['phone'] ?? '-';
 
                 Customer::create([
                     'user_id'         => $this->id,
                     'first_name'      => $nameParts[0] ?: 'Cliente',
                     'last_name'       => $nameParts[1] ?? 'Web',
-                    'document_number' => $docNumber,
+                    'document_number' => $finalDocNumber,
                     'email'           => $this->email,
                     'phone'           => $phone,
                     'address'         => $extraData['address'] ?? 'Registrado vía Web',

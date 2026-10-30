@@ -41,5 +41,16 @@ return [
         'redirect' => env('GOOGLE_REDIRECT_URI', 'https://soundheritage.duckdns.org/auth/google/callback'),
     ],
 
+    'mercadopago' => [
+        'web_public_key'   => env('MP_WEB_PUBLIC_KEY'),
+        'web_access_token' => env('MP_WEB_ACCESS_TOKEN'),
+        'qr_access_token'  => env('MP_QR_ACCESS_TOKEN'),
+        'user_id'          => env('MP_USER_ID', '3791683102'),
+        'pos_id'           => env('MP_POS_ID', 'CAJA_1'),
+        'store_id'         => env('MP_EXTERNAL_STORE_ID', 'SUCURSAL_CENTRAL'),
+        'webhook_secret'   => env('MP_WEBHOOK_SECRET'),
+        'sandbox'          => env('MP_SANDBOX', true),
+    ],
+
 ];
 

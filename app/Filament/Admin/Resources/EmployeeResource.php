@@ -49,6 +49,17 @@ class EmployeeResource extends Resource
                     ->description('Al dar de alta un empleado se genera automáticamente su usuario de sistema con su DNI como contraseña inicial. Luego podés asignarle su rol en "Usuarios y Roles".')
                     ->icon('heroicon-m-identification')
                     ->schema([
+                        Forms\Components\FileUpload::make('photo')
+                            ->label('Foto de Credencial')
+                            ->image()
+                            ->avatar()
+                            ->directory('employees')
+                            ->disk('public')
+                            ->visibility('public')
+                            ->maxSize(5120)
+                            ->columnSpanFull()
+                            ->alignCenter(),
+
                         Forms\Components\TextInput::make('first_name')
                             ->label('Nombre')
                             ->required()
@@ -131,6 +142,11 @@ class EmployeeResource extends Resource
                     ->color('gray')
                     ->sortable(),
 
+                Tables\Columns\ImageColumn::make('photo')
+                    ->label('Foto')
+                    ->disk('public')
+                    ->circular(),
+
                 Tables\Columns\TextColumn::make('last_name')
                     ->label('Empleado')
                     ->formatStateUsing(fn (Employee $record): string => "{$record->last_name}, {$record->first_name}")
@@ -170,7 +186,14 @@ class EmployeeResource extends Resource
                     ->state(fn (Employee $record): string => $record->trashed() ? 'De Baja' : 'Activo')
                     ->badge()
                     ->color(fn (string $state): string => $state === 'Activo' ? 'success' : 'danger'),
+
+                Tables\Columns\TextColumn::make('created_at')
+                    ->label('Fecha Alta')
+                    ->dateTime('d/m/Y')
+                    ->sortable()
+                    ->toggleable(isToggledHiddenByDefault: true),
             ])
+            ->defaultSort('created_at', 'desc')
 
             // -----------------------------------------------------------------
             // B) FILTROS DE BÚSQUEDA
@@ -191,19 +214,19 @@ class EmployeeResource extends Resource
             // -----------------------------------------------------------------
             // C) ACCIONES POR FILA (EDITAR, DAR DE BAJA Y REACTIVAR)
             // -----------------------------------------------------------------
+            ->recordUrl(fn (Employee $record): ?string => $record->trashed() ? null : static::getUrl('edit', ['record' => $record]))
             ->actions([
-                Tables\Actions\EditAction::make()
-                    ->hidden(fn (Employee $record): bool => $record->trashed()),
+                Tables\Actions\ActionGroup::make([
+                    Tables\Actions\DeleteAction::make()
+                        ->label('Dar de baja')
+                        ->modalHeading('Dar de baja Empleado')
+                        ->modalDescription('¿Estás seguro de dar de baja este empleado? Su cuenta de acceso al sistema también quedará suspendida.')
+                        ->hidden(fn (Employee $record): bool => $record->trashed()),
 
-                Tables\Actions\DeleteAction::make()
-                    ->label('Dar de baja')
-                    ->modalHeading('Dar de baja Empleado')
-                    ->modalDescription('¿Estás seguro de dar de baja este empleado? Su cuenta de acceso al sistema también quedará suspendida.')
-                    ->hidden(fn (Employee $record): bool => $record->trashed()),
-
-                Tables\Actions\RestoreAction::make()
-                    ->label('Reactivar')
-                    ->visible(fn (Employee $record): bool => $record->trashed()),
+                    Tables\Actions\RestoreAction::make()
+                        ->label('Reactivar')
+                        ->visible(fn (Employee $record): bool => $record->trashed()),
+                ]),
             ]);
     }
 

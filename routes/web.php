@@ -1,6 +1,13 @@
 <?php
 
 use App\Livewire\HomeTienda; 
+use App\Livewire\CatalogoProductos;
+use App\Livewire\CatalogoEventos;
+use App\Livewire\ReservarSalon;
+use App\Livewire\CheckoutTienda;
+use App\Livewire\DetalleProducto;
+use App\Livewire\DetalleEvento;
+use App\Livewire\MiCuenta;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\UserController;
 use Illuminate\Support\Facades\Route;
@@ -8,7 +15,18 @@ use Illuminate\Support\Facades\Route;
 // -----------------------------------------------------------------------------
 // RUTAS PÚBLICAS
 // -----------------------------------------------------------------------------
-Route::get('/', HomeTienda::class);
+Route::get('/', HomeTienda::class)->name('home');
+Route::get('/productos', CatalogoProductos::class)->name('productos');
+Route::get('/ofertas', CatalogoProductos::class)->name('ofertas');
+Route::get('/eventos', CatalogoEventos::class)->name('eventos');
+Route::get('/reservar-salon', ReservarSalon::class)->name('reservar-salon');
+Route::get('/checkout', CheckoutTienda::class)->name('checkout');
+Route::redirect('/carrito', '/checkout')->name('carrito');
+Route::get('/checkout/success', CheckoutTienda::class)->name('checkout.success');
+Route::get('/checkout/pending', CheckoutTienda::class)->name('checkout.pending');
+Route::get('/checkout/failure', CheckoutTienda::class)->name('checkout.failure');
+Route::get('/producto/{id}', DetalleProducto::class)->name('producto.detalle');
+Route::get('/evento/{id}', DetalleEvento::class)->name('evento.detalle');
 
 // -----------------------------------------------------------------------------
 // RUTAS BÁSICAS DE AUTENTICACIÓN (Cualquiera que inicie sesión)
@@ -21,8 +39,9 @@ Route::get('/dashboard', function () {
 })->middleware(['auth', 'verified'])->name('dashboard');
 
 Route::middleware('auth')->group(function () {
-    // Rutas del perfil nativas de Laravel Breeze
+    // Dashboard de cuenta estilo CompraGamer de Sound Heritage
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
+    Route::get('/mi-cuenta', MiCuenta::class)->name('mi-cuenta');
     Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
     Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
 });

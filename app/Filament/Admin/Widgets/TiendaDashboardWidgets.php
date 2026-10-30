@@ -323,7 +323,7 @@ class AlertasTiendaTable extends BaseTableWidget
 // =========================================================================
 class TopProductosIngresosChart extends ChartWidget
 {
-    protected static ?string $heading = 'Top Productos por Facturación ($)';
+    protected static ?string $heading = 'Top Productos por Facturación (Último Año)';
     protected static ?int $sort = 5;
     protected int | string | array $columnSpan = 1;
     protected static ?string $maxHeight = '340px';
@@ -336,7 +336,7 @@ class TopProductosIngresosChart extends ChartWidget
     protected function getData(): array
     {
         $details = InvoiceDetail::with('product')
-            ->whereHas('invoice')
+            ->whereHas('invoice', fn ($q) => $q->where('issue_date', '>=', now()->subYear()))
             ->get();
 
         $revenueByProduct = $details
@@ -403,7 +403,7 @@ class TopProductosIngresosChart extends ChartWidget
 // =========================================================================
 class SegmentacionClientesChart extends ChartWidget
 {
-    protected static ?string $heading = 'Segmentación de Clientes';
+    protected static ?string $heading = 'Segmentación de Clientes (Último Año)';
     protected static ?int $sort = 6;
     protected int | string | array $columnSpan = 1;
     protected static ?string $maxHeight = '340px';
@@ -415,7 +415,9 @@ class SegmentacionClientesChart extends ChartWidget
 
     protected function getData(): array
     {
-        $customers = Customer::where('document_number', '!=', '0')->withCount('invoices')->get();
+        $customers = Customer::where('document_number', '!=', '0')
+            ->withCount(['invoices' => fn ($q) => $q->where('issue_date', '>=', now()->subYear())])
+            ->get();
 
         $oneTime    = max(3, $customers->where('invoices_count', 1)->count());
         $occasional = max(2, $customers->whereBetween('invoices_count', [2, 3])->count());
@@ -465,9 +467,9 @@ class SegmentacionClientesChart extends ChartWidget
 // =========================================================================
 class DistribucionMontoFacturasChart extends ChartWidget
 {
-    protected static ?string $heading = 'Distribución de Ventas por Monto';
+    protected static ?string $heading = 'Distribución de Ventas por Monto (Último Año)';
     protected static ?int $sort = 7;
-    protected int | string | array $columnSpan = 1;
+    protected int | string | array $columnSpan = 'full';
     protected static ?string $maxHeight = '320px';
 
     protected function getType(): string
@@ -477,7 +479,7 @@ class DistribucionMontoFacturasChart extends ChartWidget
 
     protected function getData(): array
     {
-        $invoices = Invoice::get(['total']);
+        $invoices = Invoice::where('issue_date', '>=', now()->subYear())->get(['total']);
 
         $r1 = $invoices->filter(fn ($i) => (float) $i->total < 25000)->count();
         $r2 = $invoices->filter(fn ($i) => (float) $i->total >= 25000 && (float) $i->total < 75000)->count();
@@ -516,76 +518,6 @@ class DistribucionMontoFacturasChart extends ChartWidget
     protected function getOptions(): array
     {
         return [
-            'plugins' => [
-                'legend' => [
-                    'display'  => true,
-                    'position' => 'bottom',
-                ],
-            ],
-        ];
-    }
-}
-
-// =========================================================================
-// 8. FILA 5 (DERECHA): ANÁLISIS DE MARGEN DE PRODUCTOS (SCATTER CHART)
-// =========================================================================
-class AnalisisMargenProductosChart extends ChartWidget
-{
-    protected static ?string $heading = 'Análisis de Margen por Producto';
-    protected static ?int $sort = 8;
-    protected int | string | array $columnSpan = 1;
-    protected static ?string $maxHeight = '320px';
-
-    protected function getType(): string
-    {
-        return 'scatter';
-    }
-
-    protected function getData(): array
-    {
-        $products = Product::with('purchaseDetails')->take(50)->get();
-
-        $points = $products->map(function (Product $product) {
-            $salePrice = (float) $product->price;
-            $lastCost = (float) ($product->purchaseDetails->last()?->unit_price ?? ($salePrice * 0.62));
-
-            $marginPct = $salePrice > 0
-                ? round((($salePrice - $lastCost) / $salePrice) * 100, 1)
-                : 35.0;
-
-            $marginPct = max(22, min(66, $marginPct));
-
-            return [
-                'x' => $marginPct,
-                'y' => round($salePrice / 10000, 1),
-            ];
-        })->values()->all();
-
-        return [
-            'datasets' => [
-                [
-                    'label'           => 'Productos (Margen % vs Precio x$10k)',
-                    'data'            => $points,
-                    'backgroundColor' => '#3b82f6',
-                    'borderColor'     => '#3b82f6',
-                    'pointRadius'     => 3.5,
-                ],
-            ],
-        ];
-    }
-
-    protected function getOptions(): array
-    {
-        return [
-            'scales'  => [
-                'x' => [
-                    'min' => 20,
-                    'max' => 70,
-                ],
-                'y' => [
-                    'beginAtZero' => true,
-                ],
-            ],
             'plugins' => [
                 'legend' => [
                     'display'  => true,

@@ -133,7 +133,7 @@
 
             <!-- Cuerpo del mensaje -->
             <div class="content">
-                <h2 class="greeting">¡Hola, {{ $user->name ?? 'Usuario' }}! 👋</h2>
+                <h2 class="greeting">¡Hola, {{ $user->name ?? 'Usuario' }}!</h2>
                 <p class="text">
                     Gracias por crear tu cuenta en <strong>Sound Heritage</strong>. Para proteger la seguridad de tu información y permitirte realizar compras, consultas y reservas en nuestra plataforma, por favor confirmá tu dirección de correo electrónico.
                 </p>
@@ -146,7 +146,7 @@
 
                 <div class="info-box">
                     <p class="info-text">
-                        🔒 <strong>Seguridad:</strong> Este enlace es único y válido durante los próximos 60 minutos. Si no te registraste en nuestro sitio, podés desestimar este mensaje; tu cuenta permanecerá inactiva.
+                        <strong>Seguridad:</strong> Este enlace es único y válido durante los próximos 60 minutos. Si no te registraste en nuestro sitio, podés desestimar este mensaje; tu cuenta permanecerá inactiva.
                     </p>
                 </div>
 

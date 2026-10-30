@@ -70,19 +70,24 @@ class SocialAuthController extends Controller
 
         Auth::login($user, remember: true);
 
-        // 5. Redirección según rol
+        // 5. Redirección según rol evitando rutas cruzadas cacheadas
+        $intended = session()->pull('url.intended');
+
         if ($user->hasRole('Administrador')) {
-            return redirect()->intended('/admin');
+            $target = ($intended && str_contains($intended, '/admin')) ? $intended : '/admin';
+            return redirect($target);
         }
 
         if ($user->hasRole('Encargado de Stock')) {
-            return redirect()->intended('/stock');
+            $target = ($intended && str_contains($intended, '/stock')) ? $intended : '/stock';
+            return redirect($target);
         }
 
         if ($user->hasRole('Vendedor')) {
-            return redirect()->intended('/vendedor');
+            $target = ($intended && str_contains($intended, '/vendedor')) ? $intended : '/vendedor';
+            return redirect($target);
         }
 
-        return redirect()->intended('/?google_logged_in=1');
+        return redirect('/?google_logged_in=1');
     }
 }

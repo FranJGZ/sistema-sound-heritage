@@ -1,6 +1,7 @@
 <?php
 
 use Illuminate\Support\Facades\Route;
+use App\Http\Controllers\MercadoPagoWebhookController;
 use App\Http\Controllers\ProductController;
 use App\Http\Controllers\PurchaseController;
 
@@ -12,3 +13,6 @@ Route::apiResource('products', ProductController::class)->except(['store']);
 
 // 3. Rutas automáticas para registrar y anular compras
 Route::apiResource('purchases', PurchaseController::class);
+
+// 4. Webhook unificado de Mercado Pago (QR Presencial + Checkout Pro)
+Route::post('/mercadopago/webhook', [MercadoPagoWebhookController::class, 'handle']);

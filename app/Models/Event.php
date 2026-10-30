@@ -11,7 +11,7 @@ class Event extends Model implements Auditable
     use SoftDeletes;
     use \OwenIt\Auditing\Auditable;
 
-    protected $fillable = ['name', 'date', 'type', 'capacity', 'venue_id'];
+    protected $fillable = ['name', 'date', 'time', 'type', 'description', 'capacity', 'price', 'venue_id'];
 
     public function venue()
     {
@@ -31,5 +31,15 @@ class Event extends Model implements Auditable
     public function attendances()
     {
         return $this->hasMany(Attendance::class);
+    }
+
+    public function getOccupiedSpotsAttribute(): int
+    {
+        return (int) $this->attendances()->sum('quantity');
+    }
+
+    public function getAvailableSpotsAttribute(): int
+    {
+        return max(0, $this->capacity - $this->occupied_spots);
     }
 }

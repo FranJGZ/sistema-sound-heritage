@@ -78,13 +78,13 @@ class EventResource extends Resource
                 return;
             }
 
-            $hasConfirmedReservation = Reservation::where('venue_id', $venueId)
+            $hasReservation = Reservation::where('venue_id', $venueId)
                 ->whereDate('date', $value)
-                ->where('status', 'Confirmada')
+                ->where('status', '!=', 'Cancelada')
                 ->exists();
 
-            if ($hasConfirmedReservation) {
-                $fail('El salón ya está reservado por un cliente externo (Reserva Confirmada) en esa fecha.');
+            if ($hasReservation) {
+                $fail('El salón ya cuenta con una reserva activa o pendiente de un cliente en esa fecha.');
             }
         };
     }
@@ -119,7 +119,7 @@ class EventResource extends Resource
         Attendance::create([
             'event_id'          => $record->id,
             'customer_id'       => $data['customer_id'],
-            'registration_date' => $data['registration_date'],
+            'registration_date' => $data['registration_date'] ?? now(),
         ]);
 
         Notification::make()
@@ -215,9 +215,31 @@ class EventResource extends Resource
                     Forms\Components\DatePicker::make('date')
                         ->label('Fecha del Evento')
                         ->required()
+                        ->minDate(now()->startOfDay())
+                        ->live()
+                        ->validationMessages([
+                            'after_or_equal' => 'No se permite seleccionar una fecha anterior a la actual.',
+                        ])
                         ->rules([
                             fn (Get $get, ?Model $record): Closure => self::validateVenueAvailability($get, $record),
                         ]),
+
+                    Forms\Components\TimePicker::make('time')
+                        ->label('Hora de Inicio / Puerta')
+                        ->seconds(false)
+                        ->default('21:00'),
+
+                    Forms\Components\TextInput::make('price')
+                        ->label('Precio de Entrada ($)')
+                        ->numeric()
+                        ->prefix('$')
+                        ->default(0)
+                        ->minValue(0)
+                        ->maxValue(99999999.99)
+                        ->validationMessages([
+                            'max' => 'Precio excedido al máximo permitido ($99.999.999,99).',
+                        ])
+                        ->required(),
 
                     // Se limita el tope máximo a 100 personas por la capacidad física habilitada del salón
                     Forms\Components\TextInput::make('capacity')
@@ -228,7 +250,7 @@ class EventResource extends Resource
                         ->maxValue(100)
                         ->live(onBlur: true)
                         ->required(),
-                ])->columns(2),
+                ])->columns(3),
 
             // -----------------------------------------------------------------
             // SECCIÓN 2: AUSPICIANTES (TABLA INTERMEDIA EVENT_SPONSORS)
@@ -287,6 +309,17 @@ class EventResource extends Resource
                     ->date('d/m/Y')
                     ->sortable(),
 
+                Tables\Columns\TextColumn::make('time')
+                    ->label('Hora')
+                    ->time('H:i')
+                    ->sortable()
+                    ->placeholder('-'),
+
+                Tables\Columns\TextColumn::make('price')
+                    ->label('Entrada')
+                    ->money('ARS')
+                    ->sortable(),
+
                 // Alerta en amarillo al superar el 70% de ocupación del salón y en rojo cuando se agotan las localidades
                 Tables\Columns\TextColumn::make('ocupacion')
                     ->label('Inscriptos / Cupo')
@@ -314,8 +347,13 @@ class EventResource extends Resource
                     ->state(fn (Event $record): string => $record->trashed() ? 'Cancelado' : 'Activo')
                     ->badge()
                     ->color(fn (string $state): string => $state === 'Activo' ? 'success' : 'danger'),
+                Tables\Columns\TextColumn::make('created_at')
+                    ->label('Fecha de Creación')
+                    ->dateTime('d/m/Y H:i')
+                    ->sortable()
+                    ->toggleable(isToggledHiddenByDefault: true),
             ])
-            ->defaultSort('date', 'desc')
+            ->defaultSort('created_at', 'desc')
 
             // -----------------------------------------------------------------
             // B) FILTROS DE AUDITORÍA Y BÚSQUEDA (100% ELOQUENT ORM)
@@ -446,27 +484,37 @@ class EventResource extends Resource
                                     ->modalWidth('3xl')
                             ),
 
+                        Forms\Components\TextInput::make('price')
+                            ->label('Precio de Entrada ($)')
+                            ->prefix('$')
+                            ->numeric()
+                            ->default(fn (Event $record) => (float) $record->price)
+                            ->disabled()
+                            ->dehydrated(false),
+
                         Forms\Components\DatePicker::make('registration_date')
                             ->label('Fecha de Inscripción')
                             ->default(now())
+                            ->disabled()
+                            ->dehydrated()
                             ->required(),
                     ])
                     ->action(fn (Event $record, array $data) => self::registerAttendee($record, $data)),
 
-                Tables\Actions\EditAction::make()
-                    ->hidden(fn (Event $record) => $record->trashed()),
+                Tables\Actions\ActionGroup::make([
+                    // Se usa baja lógica como cancelación para no perder el registro histórico de los inscriptos ni los sponsors asociados
+                    Tables\Actions\DeleteAction::make()
+                        ->label('Cancelar Evento')
+                        ->modalHeading('Cancelar Evento Propio')
+                        ->modalDescription('El evento quedará marcado como cancelado pero se conservará en el historial.')
+                        ->hidden(fn (Event $record) => $record->trashed()),
 
-                // Se usa baja lógica como cancelación para no perder el registro histórico de los inscriptos ni los sponsors asociados
-                Tables\Actions\DeleteAction::make()
-                    ->label('Cancelar Evento')
-                    ->modalHeading('Cancelar Evento Propio')
-                    ->modalDescription('El evento quedará marcado como cancelado pero se conservará en el historial.')
-                    ->hidden(fn (Event $record) => $record->trashed()),
-
-                Tables\Actions\RestoreAction::make()
-                    ->label('Reactivar')
-                    ->visible(fn (Event $record) => $record->trashed()),
-            ]);
+                    Tables\Actions\RestoreAction::make()
+                        ->label('Reactivar')
+                        ->visible(fn (Event $record) => $record->trashed()),
+                ]),
+            ])
+            ->recordUrl(fn (Event $record): ?string => $record->trashed() ? null : static::getUrl('edit', ['record' => $record]));
     }
 
     // =========================================================================

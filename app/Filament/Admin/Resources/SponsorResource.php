@@ -131,7 +131,14 @@ class SponsorResource extends Resource
                     ->state(fn (Sponsor $record): string => $record->trashed() ? 'De Baja' : 'Activo')
                     ->badge()
                     ->color(fn (string $state): string => $state === 'Activo' ? 'success' : 'danger'),
+
+                Tables\Columns\TextColumn::make('created_at')
+                    ->label('Fecha Alta')
+                    ->dateTime('d/m/Y')
+                    ->sortable()
+                    ->toggleable(isToggledHiddenByDefault: true),
             ])
+            ->defaultSort('created_at', 'desc')
 
             // -----------------------------------------------------------------
             // B) FILTROS DE BÚSQUEDA

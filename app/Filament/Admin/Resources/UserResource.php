@@ -169,7 +169,14 @@ class UserResource extends Resource
                     ->state(fn (User $record): string => $record->trashed() ? 'Suspendido' : 'Activo')
                     ->badge()
                     ->color(fn (string $state): string => $state === 'Activo' ? 'success' : 'danger'),
+
+                Tables\Columns\TextColumn::make('created_at')
+                    ->label('Fecha Alta')
+                    ->dateTime('d/m/Y')
+                    ->sortable()
+                    ->toggleable(isToggledHiddenByDefault: true),
             ])
+            ->defaultSort('created_at', 'desc')
 
             // -----------------------------------------------------------------
             // B) FILTROS DE BÚSQUEDA
@@ -190,34 +197,33 @@ class UserResource extends Resource
             // -----------------------------------------------------------------
             // C) ACCIONES POR FILA (ROLES, RESETEAR CLAVE, SUSPENDER Y REACTIVAR)
             // -----------------------------------------------------------------
+            ->recordUrl(fn (User $record): ?string => $record->trashed() ? null : static::getUrl('edit', ['record' => $record]))
             ->actions([
-                Tables\Actions\EditAction::make()
-                    ->label('Roles')
-                    ->hidden(fn (User $record): bool => $record->trashed()),
+                Tables\Actions\ActionGroup::make([
+                    Tables\Actions\Action::make('enviar_reset')
+                        ->label('Resetear Clave')
+                        ->icon('heroicon-o-envelope')
+                        ->color('warning')
+                        ->requiresConfirmation()
+                        ->modalHeading('Enviar Enlace de Recuperación de Contraseña')
+                        ->modalDescription(
+                            fn (User $record) => "¿Confirmás enviar un correo a {$record->email} con el enlace para que el usuario restablezca su propia contraseña?"
+                        )
+                        ->action(fn (User $record) => self::sendPasswordResetLink($record))
+                        ->hidden(fn (User $record): bool => $record->trashed()),
 
-                Tables\Actions\Action::make('enviar_reset')
-                    ->label('Resetear Clave')
-                    ->icon('heroicon-o-envelope')
-                    ->color('warning')
-                    ->requiresConfirmation()
-                    ->modalHeading('Enviar Enlace de Recuperación de Contraseña')
-                    ->modalDescription(
-                        fn (User $record) => "¿Confirmás enviar un correo a {$record->email} con el enlace para que el usuario restablezca su propia contraseña?"
-                    )
-                    ->action(fn (User $record) => self::sendPasswordResetLink($record))
-                    ->hidden(fn (User $record): bool => $record->trashed()),
+                    // Impide que el usuario logueado suspenda su propia cuenta activa por accidente
+                    Tables\Actions\DeleteAction::make()
+                        ->label('Suspender')
+                        ->modalHeading('Suspender acceso de usuario')
+                        ->modalDescription('¿Estás seguro de suspender esta cuenta? El usuario ya no podrá iniciar sesión en el sistema.')
+                        ->hidden(fn (User $record): bool => $record->trashed() || $record->id === auth()->id()),
 
-                // Impide que el usuario logueado suspenda su propia cuenta activa por accidente
-                Tables\Actions\DeleteAction::make()
-                    ->label('Suspender')
-                    ->modalHeading('Suspender acceso de usuario')
-                    ->modalDescription('¿Estás seguro de suspender esta cuenta? El usuario ya no podrá iniciar sesión en el sistema.')
-                    ->hidden(fn (User $record): bool => $record->trashed() || $record->id === auth()->id()),
-
-                Tables\Actions\RestoreAction::make()
-                    ->label('Reactivar')
-                    ->modalHeading('Reactivar cuenta de usuario')
-                    ->visible(fn (User $record): bool => $record->trashed()),
+                    Tables\Actions\RestoreAction::make()
+                        ->label('Reactivar')
+                        ->modalHeading('Reactivar cuenta de usuario')
+                        ->visible(fn (User $record): bool => $record->trashed()),
+                ]),
             ]);
     }
 

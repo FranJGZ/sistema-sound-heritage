@@ -381,6 +381,27 @@ class ProductResource extends Resource
                         ->maxLength(255)
                         ->columnSpanFull(),
 
+                    Forms\Components\FileUpload::make('image')
+                        ->label('Fotografía del Producto')
+                        ->image()
+                        ->directory('products')
+                        ->disk('public')
+                        ->visibility('public')
+                        ->maxSize(5120)
+                        ->imageEditor()
+                        ->columnSpanFull(),
+
+                    Forms\Components\TextInput::make('brand')
+                        ->label('Marca / Fabricante')
+                        ->maxLength(100)
+                        ->placeholder('Ej: Fender, Yamaha, Gibson, Marshall')
+                        ->datalist(fn () => Product::query()->whereNotNull('brand')->where('brand', '!=', '')->distinct()->pluck('brand')->toArray()),
+
+                    Forms\Components\TextInput::make('model')
+                        ->label('Modelo')
+                        ->maxLength(100)
+                        ->placeholder('Ej: Stratocaster, Les Paul Standard, Pacifica'),
+
                     // Se marca live() para que el formulario redibuje por AJAX la sección de ficha técnica al cambiar la categoría
                     Forms\Components\Select::make('type')
                         ->label('Categoría / Tipo de Producto')
@@ -395,7 +416,22 @@ class ProductResource extends Resource
                         ->prefix('$')
                         ->default(0)
                         ->minValue(0)
+                        ->maxValue(99999999.99)
+                        ->validationMessages([
+                            'max' => 'Precio excedido al máximo permitido ($99.999.999,99).',
+                        ])
                         ->required(),
+
+                    Forms\Components\TextInput::make('discount_percentage')
+                        ->label('Descuento de Oferta (% OFF)')
+                        ->numeric()
+                        ->integer()
+                        ->minValue(1)
+                        ->maxValue(99)
+                        ->suffix('%')
+                        ->placeholder('Ej: 15, 20, 30')
+                        ->helperText('Dejar vacío para producto estándar. Si se ingresa un porcentaje, se publica en /ofertas.')
+                        ->nullable(),
 
                     Forms\Components\TextInput::make('stock')
                         ->label('Stock Actual en Depósito')
@@ -403,7 +439,7 @@ class ProductResource extends Resource
                         ->default(0)
                         ->minValue(0)
                         ->required(),
-                ])->columns(3),
+                ])->columns(4),
 
             ...self::getProductSpecsFormSchema(),
         ]);
@@ -419,6 +455,16 @@ class ProductResource extends Resource
             // A) COLUMNAS VISIBLES EN EL LISTADO
             // -----------------------------------------------------------------
             ->columns([
+                Tables\Columns\ImageColumn::make('image')
+                    ->label('Foto')
+                    ->square()
+                    ->getStateUsing(function ($record) {
+                        if (empty($record->image)) return null;
+                        if (str_starts_with($record->image, 'http')) return $record->image;
+                        if (str_starts_with($record->image, 'img/')) return asset($record->image);
+                        return asset('storage/' . $record->image);
+                    }),
+
                 Tables\Columns\TextColumn::make('name')
                     ->label('Producto')
                     ->weight('bold')
@@ -426,6 +472,8 @@ class ProductResource extends Resource
                         // Agrupa en un sub-where y castea el JSON a texto para que MySQL busque sin importar mayúsculas
                         return $query->where(function (Builder $sub) use ($search) {
                             $sub->where('name', 'like', "%{$search}%")
+                                ->orWhere('brand', 'like', "%{$search}%")
+                                ->orWhere('model', 'like', "%{$search}%")
                                 ->orWhereRaw('LOWER(CAST(specs AS CHAR)) LIKE ?', ['%' . mb_strtolower($search) . '%']);
                         });
                     })
@@ -438,6 +486,21 @@ class ProductResource extends Resource
                     })
                     ->sortable(),
 
+                Tables\Columns\TextColumn::make('brand')
+                    ->label('Marca')
+                    ->badge()
+                    ->color('gray')
+                    ->searchable()
+                    ->sortable()
+                    ->placeholder('-'),
+
+                Tables\Columns\TextColumn::make('model')
+                    ->label('Modelo')
+                    ->searchable()
+                    ->sortable()
+                    ->toggleable(isToggledHiddenByDefault: true)
+                    ->placeholder('-'),
+
                 // Traduce la clave interna ('cuerda', 'teclado') a su etiqueta legible para mostrarla en la tabla
                 Tables\Columns\TextColumn::make('type')
                     ->label('Categoría')
@@ -449,6 +512,13 @@ class ProductResource extends Resource
                 Tables\Columns\TextColumn::make('price')
                     ->label('Precio')
                     ->money('ARS')
+                    ->sortable(),
+
+                Tables\Columns\TextColumn::make('discount_percentage')
+                    ->label('Promo')
+                    ->formatStateUsing(fn ($state) => $state ? "{$state}% OFF" : '—')
+                    ->badge()
+                    ->color(fn ($state) => $state ? 'warning' : 'gray')
                     ->sortable(),
 
                 // Advierte en amarillo cuando quedan 5 unidades o menos y en rojo cuando el artículo se agotó
@@ -469,7 +539,7 @@ class ProductResource extends Resource
                     ->badge()
                     ->color(fn (string $state): string => $state === 'Activo' ? 'success' : 'danger'),
             ])
-            ->defaultSort('name', 'asc')
+            ->defaultSort('created_at', 'desc')
 
             // -----------------------------------------------------------------
             // B) FILTROS DE AUDITORÍA Y BÚSQUEDA (100% ELOQUENT ORM)
@@ -483,9 +553,20 @@ class ProductResource extends Resource
                     ->trueLabel('Todos (Activos + De Baja)')
                     ->falseLabel('Solo Dados de Baja'),
 
+                Tables\Filters\Filter::make('solo_ofertas')
+                    ->label('Solo en Oferta (% OFF)')
+                    ->query(fn (Builder $query): Builder => $query->whereNotNull('discount_percentage')->where('discount_percentage', '>', 0)),
+
                 Tables\Filters\SelectFilter::make('type')
                     ->label('Categorías')
                     ->options(self::getProductTypeOptions())
+                    ->multiple()
+                    ->preload(),
+
+                Tables\Filters\SelectFilter::make('brand')
+                    ->label('Marcas')
+                    ->options(fn () => Product::query()->whereNotNull('brand')->where('brand', '!=', '')->distinct()->pluck('brand', 'brand')->toArray())
+                    ->searchable()
                     ->multiple()
                     ->preload(),
 
@@ -601,20 +682,20 @@ class ProductResource extends Resource
             // -----------------------------------------------------------------
             // D) ACCIONES POR CADA FILA (EDITAR, DAR DE BAJA Y REACTIVAR)
             // -----------------------------------------------------------------
+            ->recordUrl(fn (Product $record): ?string => $record->trashed() ? null : static::getUrl('edit', ['record' => $record]))
             ->actions([
-                Tables\Actions\EditAction::make()
-                    ->hidden(fn (Product $record) => $record->trashed()),
+                Tables\Actions\ActionGroup::make([
+                    // Se usa baja lógica para retirar el artículo de la venta sin romper las facturas ni compras históricas donde figura
+                    Tables\Actions\DeleteAction::make()
+                        ->label('Dar de baja')
+                        ->modalHeading('Dar de baja Producto')
+                        ->modalDescription('¿Estás seguro de dar de baja este producto? Se ocultará de la tienda pero conservará su historial.')
+                        ->hidden(fn (Product $record) => $record->trashed()),
 
-                // Se usa baja lógica para retirar el artículo de la venta sin romper las facturas ni compras históricas donde figura
-                Tables\Actions\DeleteAction::make()
-                    ->label('Dar de baja')
-                    ->modalHeading('Dar de baja Producto')
-                    ->modalDescription('¿Estás seguro de dar de baja este producto? Se ocultará de la tienda pero conservará su historial.')
-                    ->hidden(fn (Product $record) => $record->trashed()),
-
-                Tables\Actions\RestoreAction::make()
-                    ->label('Reactivar')
-                    ->visible(fn (Product $record) => $record->trashed()),
+                    Tables\Actions\RestoreAction::make()
+                        ->label('Reactivar')
+                        ->visible(fn (Product $record) => $record->trashed()),
+                ]),
             ]);
     }
 

@@ -135,9 +135,24 @@ class PurchaseResource extends Resource
                     Forms\Components\Repeater::make('purchaseDetails')
                         ->label('Ítems Comprados')
                         ->relationship()
+                        ->collapsible()
+                        ->collapsed()
+                        ->collapseAllAction(fn (Forms\Components\Actions\Action $action) => $action->label('Colapsar todos'))
+                        ->expandAllAction(fn (Forms\Components\Actions\Action $action) => $action->label('Expandir todos'))
+                        ->itemLabel(function (array $state): ?string {
+                            $productId = $state['product_id'] ?? null;
+                            $qty = (int) ($state['quantity'] ?? 0);
+                            $price = (float) ($state['price'] ?? 0);
+                            if (! $productId) {
+                                return 'Nuevo artículo (sin seleccionar)';
+                            }
+                            $product = \App\Models\Product::find($productId);
+                            $name = $product ? $product->name : "Producto #{$productId}";
+                            $subtotal = number_format($qty * $price, 2, ',', '.');
+                            return "{$name} • Cant: {$qty} u. • Subtotal: \${$subtotal}";
+                        })
                         ->live()
                         ->afterStateUpdated(fn (Get $get, Set $set) => self::calculateTotal($get, $set))
-                        // Necesario para que al quitar un renglón del remito el costo total general no quede con el importe viejo
                         ->deleteAction(
                             fn (Forms\Components\Actions\Action $action) => $action->after(fn (Get $get, Set $set) => self::calculateTotal($get, $set)),
                         )
@@ -194,6 +209,10 @@ class PurchaseResource extends Resource
                                                 ->numeric()
                                                 ->prefix('$')
                                                 ->minValue(0)
+                                                ->maxValue(99999999.99)
+                                                ->validationMessages([
+                                                    'max' => 'Precio excedido al máximo permitido ($99.999.999,99).',
+                                                ])
                                                 ->required(),
 
                                             // El stock inicial se fija oculto en 0 porque al guardar la compra el modelo sumará automáticamente la cantidad recibida
@@ -223,6 +242,10 @@ class PurchaseResource extends Resource
                                 ->numeric()
                                 ->prefix('$')
                                 ->minValue(0)
+                                ->maxValue(99999999.99)
+                                ->validationMessages([
+                                    'max' => 'Precio excedido al máximo permitido ($99.999.999,99).',
+                                ])
                                 ->required()
                                 ->live(onBlur: true)
                                 ->afterStateUpdated(fn (Get $get, Set $set) => self::calculateTotal($get, $set))
@@ -364,8 +387,13 @@ class PurchaseResource extends Resource
                     ->badge()
                     ->state(fn (Purchase $record): string => $record->trashed() ? 'Anulada' : 'Activa')
                     ->color(fn (string $state): string => $state === 'Activa' ? 'success' : 'danger'),
+                Tables\Columns\TextColumn::make('created_at')
+                    ->label('Fecha de Creación')
+                    ->dateTime('d/m/Y H:i')
+                    ->sortable()
+                    ->toggleable(isToggledHiddenByDefault: true),
             ])
-            ->defaultSort('id', 'desc')
+            ->defaultSort('created_at', 'desc')
 
             // -----------------------------------------------------------------
             // B) FILTROS DE AUDITORÍA Y BÚSQUEDA
@@ -456,20 +484,24 @@ class PurchaseResource extends Resource
                     ->action(fn ($livewire) => self::exportPdf($livewire)),
             ])
 
+            ->recordAction(Tables\Actions\ViewAction::class)
             // -----------------------------------------------------------------
             // D) ACCIONES POR CADA FILA (VER Y ANULAR)
             // -----------------------------------------------------------------
             ->actions([
-                Tables\Actions\ViewAction::make()
-                    ->modalHeading('Detalle de Orden de Compra')
-                    ->modalWidth(MaxWidth::FourExtraLarge),
+                Tables\Actions\ActionGroup::make([
+                    Tables\Actions\ViewAction::make()
+                        ->label('Ver Detalle')
+                        ->modalHeading('Detalle de Orden de Compra')
+                        ->modalWidth(MaxWidth::FourExtraLarge),
 
-                // Se usa DeleteAction como 'Anular' (baja lógica) y se oculta si ya fue anulada para no descontar el stock dos veces
-                Tables\Actions\DeleteAction::make()
-                    ->label('Anular')
-                    ->modalHeading('Anular Compra a Proveedor')
-                    ->modalDescription('¿Estás seguro? Al anular esta compra, las unidades ingresadas se descontarán automáticamente del stock actual.')
-                    ->hidden(fn (Purchase $record): bool => $record->trashed()),
+                    // Se usa DeleteAction como 'Anular' (baja lógica) y se oculta si ya fue anulada para no descontar el stock dos veces
+                    Tables\Actions\DeleteAction::make()
+                        ->label('Anular')
+                        ->modalHeading('Anular Compra a Proveedor')
+                        ->modalDescription('¿Estás seguro? Al anular esta compra, las unidades ingresadas se descontarán automáticamente del stock actual.')
+                        ->hidden(fn (Purchase $record): bool => $record->trashed()),
+                ]),
             ]);
     }
 

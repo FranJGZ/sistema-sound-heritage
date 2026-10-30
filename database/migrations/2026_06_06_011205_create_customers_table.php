@@ -13,6 +13,7 @@ return new class extends Migration {
             $table->string('address'); 
             $table->string('phone'); 
             $table->string('tax_id')->nullable(); 
+            $table->string('tax_condition')->default('Consumidor Final');
             $table->string('email')->nullable(); 
             $table->foreignId('city_id')->constrained('cities'); 
 

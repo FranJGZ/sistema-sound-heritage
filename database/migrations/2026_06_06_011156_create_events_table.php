@@ -8,8 +8,11 @@ return new class extends Migration {
             $table->id(); 
             $table->string('name'); 
             $table->date('date'); 
+            $table->time('time')->nullable(); 
             $table->string('type'); 
+            $table->text('description')->nullable(); 
             $table->integer('capacity'); 
+            $table->decimal('price', 10, 2)->default(0); 
             $table->foreignId('venue_id')->constrained('venues'); 
             $table->softDeletes();
             $table->timestamps();

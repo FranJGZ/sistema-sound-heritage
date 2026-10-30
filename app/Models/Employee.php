@@ -17,6 +17,7 @@ class Employee extends Model implements Auditable
         'document_number',
         'last_name',
         'first_name',
+        'photo',
         'address',
         'phone',
         'city_id',

@@ -8,6 +8,9 @@ return new class extends Migration {
             $table->id(); 
             $table->string('type'); 
             $table->string('name'); 
+            $table->string('brand')->nullable();
+            $table->string('model')->nullable();
+            $table->string('image')->nullable();
             $table->decimal('price', 10, 2); 
             $table->timestamps();
             $table->integer('stock')->default(0); 

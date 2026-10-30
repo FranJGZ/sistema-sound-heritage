@@ -352,8 +352,13 @@ class CustomerResource extends Resource
                     ->state(fn (Customer $record): string => $record->trashed() ? 'De Baja' : 'Activo')
                     ->badge()
                     ->color(fn (string $state): string => $state === 'Activo' ? 'success' : 'danger'),
+                Tables\Columns\TextColumn::make('created_at')
+                    ->label('Fecha de Alta')
+                    ->dateTime('d/m/Y H:i')
+                    ->sortable()
+                    ->toggleable(isToggledHiddenByDefault: true),
             ])
-            ->defaultSort('id', 'desc')
+            ->defaultSort('created_at', 'desc')
 
             // -----------------------------------------------------------------
             // B) FILTROS DE AUDITORÍA Y BÚSQUEDA
@@ -452,20 +457,19 @@ class CustomerResource extends Resource
             // -----------------------------------------------------------------
             // D) ACCIONES POR CADA FILA (EDITAR, DAR DE BAJA Y REACTIVAR)
             // -----------------------------------------------------------------
+            ->recordUrl(fn (Customer $record): ?string => $record->trashed() ? null : static::getUrl('edit', ['record' => $record]))
             ->actions([
-                Tables\Actions\EditAction::make()
-                    ->hidden(fn (Customer $record) => $record->trashed()),
+                Tables\Actions\ActionGroup::make([
+                    Tables\Actions\DeleteAction::make()
+                        ->label('Dar de baja')
+                        ->modalHeading('Dar de baja cliente')
+                        ->modalDescription('El cliente quedará inactivo pero se conservará todo su historial de facturas y reservas.')
+                        ->hidden(fn (Customer $record) => $record->trashed()),
 
-                // Se aplica baja lógica (SoftDelete) porque borrar físicamente al cliente rompería la integridad referencial de sus facturas
-                Tables\Actions\DeleteAction::make()
-                    ->label('Dar de baja')
-                    ->modalHeading('Dar de baja cliente')
-                    ->modalDescription('El cliente quedará inactivo pero se conservará todo su historial de facturas y reservas.')
-                    ->hidden(fn (Customer $record) => $record->trashed()),
-
-                Tables\Actions\RestoreAction::make()
-                    ->label('Reactivar')
-                    ->visible(fn (Customer $record) => $record->trashed()),
+                    Tables\Actions\RestoreAction::make()
+                        ->label('Reactivar')
+                        ->visible(fn (Customer $record) => $record->trashed()),
+                ]),
             ]);
     }
 

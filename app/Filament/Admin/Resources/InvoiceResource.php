@@ -11,11 +11,13 @@ use App\Models\Invoice;
 use App\Models\PaymentMethod;
 use App\Models\Product;
 use App\Models\Store;
+use App\Services\MercadoPagoService;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Filament\Forms;
 use Filament\Forms\Form;
 use Filament\Infolists;
 use Filament\Infolists\Infolist;
+use Filament\Notifications\Notification;
 use Filament\Resources\Resource;
 use Filament\Support\Enums\MaxWidth;
 use Filament\Tables;
@@ -211,21 +213,45 @@ class InvoiceResource extends Resource
                                                         ->orderBy('name');
                                                 }
                                             )
-                                            ->getOptionLabelFromRecordUsing(fn (Product $record) => "{$record->name} (Stock: {$record->stock}) — $" . number_format($record->price, 2, ',', '.'))
+                                            ->getOptionLabelFromRecordUsing(function (Product $record) {
+                                                $hasOffer = ($record->discount_percentage && $record->discount_percentage > 0);
+                                                $cashPrice = number_format($record->cash_price, 2, ',', '.');
+                                                $listPrice = number_format($record->price, 2, ',', '.');
+                                                if ($hasOffer) {
+                                                    return "{$record->name} (Stock: {$record->stock}) — Efectivo: \${$cashPrice} [{$record->discount_percentage}% OFF Oferta] (Lista: \${$listPrice})";
+                                                }
+                                                return "{$record->name} (Stock: {$record->stock}) — Efectivo: \${$cashPrice} (Lista: \${$listPrice})";
+                                            })
                                             ->searchable(['name'])
                                             ->preload()
                                             ->required()
                                             // Impide cargar el mismo producto en dos renglones distintos y burlar el tope de stock por fila
                                             ->disableOptionsWhenSelectedInSiblingRepeaterItems()
                                             ->live()
-                                            // Al elegir el producto se copia su precio actual para congelar el valor histórico de la venta
+                                            // Al elegir el producto se calcula su precio aplicando oferta y descuento de contado si es efectivo
                                             ->afterStateUpdated(function ($state, Forms\Set $set, Forms\Get $get) {
-                                                $product  = Product::find($state);
-                                                $price    = (float) ($product->price ?? 0);
+                                                $product = Product::find($state);
+                                                if (!$product) {
+                                                    return;
+                                                }
+                                                $paymentDetails = $get('../../paymentDetails') ?? $get('../../../paymentDetails') ?? [];
+                                                $isMp = false;
+                                                foreach ($paymentDetails as $pd) {
+                                                    $pmId = $pd['payment_method_id'] ?? null;
+                                                    if ($pmId) {
+                                                        $pmName = \App\Models\PaymentMethod::find($pmId)?->name;
+                                                        if ($pmName && str_contains(strtolower($pmName), 'mercado pago')) {
+                                                            $isMp = true;
+                                                            break;
+                                                        }
+                                                    }
+                                                }
+
+                                                $unitPrice = $isMp ? (float) $product->offer_price : (float) $product->cash_price;
                                                 $quantity = (float) ($get('quantity') ?? 1);
 
-                                                $set('unit_price', number_format($price, 2, '.', ''));
-                                                $set('subtotal', number_format($price * $quantity, 2, '.', ''));
+                                                $set('unit_price', number_format($unitPrice, 2, '.', ''));
+                                                $set('subtotal', number_format($unitPrice * $quantity, 2, '.', ''));
                                                 self::calculateTotal($get, $set);
                                             })
                                             ->columnSpan(7),
@@ -370,10 +396,9 @@ class InvoiceResource extends Resource
                                     ->dehydrated()
                                     ->required(),
 
-                                // Se cuenta con withTrashed() porque la numeración fiscal es correlativa y no puede reutilizar números anulados
                                 Forms\Components\TextInput::make('receipt_number')
                                     ->label('N° de Comprobante')
-                                    ->default(fn () => str_pad((string) (Invoice::withTrashed()->count() + 1), 8, '0', STR_PAD_LEFT))
+                                    ->default(fn () => Invoice::getNextReceiptNumber('0001'))
                                     ->disabled()
                                     ->dehydrated()
                                     ->required(),
@@ -398,7 +423,7 @@ class InvoiceResource extends Resource
                             ])
                             ->columns(2),
 
-                        // Se usa Repeater en lugar de un Select simple para soportar pagos mixtos (ej. Efectivo + Transferencia)
+                        // Medio de Pago: Efectivo o Mercado Pago (el estado pendiente/abonado se infiere automáticamente)
                         Forms\Components\Section::make('Medio de Pago')
                             ->icon('heroicon-m-credit-card')
                             ->schema([
@@ -409,9 +434,63 @@ class InvoiceResource extends Resource
                                         Forms\Components\Select::make('payment_method_id')
                                             ->label('Método de Pago')
                                             ->relationship('paymentMethod', 'name')
-                                            ->default(fn () => PaymentMethod::first()?->id)
+                                            ->default(fn () => PaymentMethod::where('name', 'Efectivo')->value('id') ?? PaymentMethod::first()?->id)
                                             ->preload()
-                                            ->required(),
+                                            ->required()
+                                            ->live()
+                                            ->afterStateUpdated(function ($state, Forms\Set $set, Forms\Get $get) {
+                                                $items = $get('../../invoiceDetails') ?? [];
+                                                $isMp = false;
+                                                if ($state) {
+                                                    $pmName = PaymentMethod::find($state)?->name;
+                                                    if ($pmName && str_contains(strtolower($pmName), 'mercado pago')) {
+                                                        $isMp = true;
+                                                    }
+                                                }
+                                                $updatedItems = [];
+                                                $total = 0.0;
+                                                foreach ($items as $k => $item) {
+                                                    if (!empty($item['product_id'])) {
+                                                        $prod = Product::find($item['product_id']);
+                                                        if ($prod) {
+                                                            $qty = (float) ($item['quantity'] ?? 1);
+                                                            $uPrice = $isMp ? (float) $prod->offer_price : (float) $prod->cash_price;
+                                                            $item['unit_price'] = number_format($uPrice, 2, '.', '');
+                                                            $item['subtotal'] = number_format($uPrice * $qty, 2, '.', '');
+                                                            $total += $uPrice * $qty;
+                                                        }
+                                                    }
+                                                    $updatedItems[$k] = $item;
+                                                }
+                                                $set('../../invoiceDetails', $updatedItems);
+                                                $set('../../total', number_format($total, 2, '.', ''));
+                                            }),
+
+                                        Forms\Components\TextInput::make('monto_recibido')
+                                            ->label('Efectivo Recibido / Con cuánto abona')
+                                            ->numeric()
+                                            ->prefix('$')
+                                            ->placeholder('Ej: 50000')
+                                            ->live(debounce: 300)
+                                            ->dehydrated(false)
+                                            ->visible(function (Forms\Get $get) {
+                                                $pmId = $get('payment_method_id');
+                                                $pmName = $pmId ? PaymentMethod::find($pmId)?->name : null;
+                                                return $pmName && str_contains(strtolower($pmName), 'efectivo');
+                                            })
+                                            ->helperText(function (Forms\Get $get) {
+                                                $recibido = (float) $get('monto_recibido');
+                                                $total = (float) $get('../../total');
+                                                if ($recibido > 0) {
+                                                    $cambio = $recibido - $total;
+                                                    if ($cambio >= 0) {
+                                                        return '💵 Cambio / Vuelto a entregar al cliente: $ ' . number_format($cambio, 2, ',', '.');
+                                                    } else {
+                                                        return '⚠️ Faltan $ ' . number_format(abs($cambio), 2, ',', '.') . ' para cubrir el total.';
+                                                    }
+                                                }
+                                                return 'Ingresá el importe entregado por el cliente para calcular automáticamente el vuelto.';
+                                            }),
                                     ])
                                     ->defaultItems(1)
                                     ->addActionLabel('+ Agregar otro medio de pago'),
@@ -512,6 +591,7 @@ class InvoiceResource extends Resource
     public static function table(Table $table): Table
     {
         return $table
+            ->recordAction(Tables\Actions\ViewAction::class)
             // -----------------------------------------------------------------
             // A) COLUMNAS VISIBLES EN EL LISTADO
             // -----------------------------------------------------------------
@@ -546,14 +626,36 @@ class InvoiceResource extends Resource
                     ->money('ARS')
                     ->sortable(),
 
+                Tables\Columns\TextColumn::make('payment_status')
+                    ->label('Cobro')
+                    ->badge()
+                    ->color(fn (?string $state): string => match ($state) {
+                        'completed' => 'success',
+                        'refunded'  => 'danger',
+                        'pending'   => 'warning',
+                        default     => 'gray',
+                    })
+                    ->formatStateUsing(fn (?string $state, Invoice $record): string => match ($state) {
+                        'completed' => 'Abonado',
+                        'refunded'  => 'Reembolsado' . ($record->mp_refund_id ? " (#{$record->mp_refund_id})" : ''),
+                        'pending'   => 'Esperando QR',
+                        default     => $state ?: 'Pendiente',
+                    }),
+
                 // Evalúa trashed() (deleted_at) para distinguir visualmente comprobantes válidos de anulados
                 Tables\Columns\TextColumn::make('estado')
                     ->label('Estado')
                     ->badge()
                     ->state(fn (Invoice $record): string => $record->trashed() ? 'Anulada' : 'Emitida')
                     ->color(fn (string $state): string => $state === 'Emitida' ? 'success' : 'danger'),
+                Tables\Columns\TextColumn::make('created_at')
+                    ->label('Fecha de Creación')
+                    ->dateTime('d/m/Y H:i')
+                    ->sortable()
+                    ->toggleable(isToggledHiddenByDefault: true),
             ])
-            ->defaultSort('issue_date', 'desc')
+            ->defaultSort('created_at', 'desc')
+            ->poll('3s')
 
             // -----------------------------------------------------------------
             // B) FILTROS DE AUDITORÍA Y BÚSQUEDA
@@ -652,22 +754,125 @@ class InvoiceResource extends Resource
             // D) ACCIONES POR CADA FILA (TICKET, VER EN MODAL Y ANULAR)
             // -----------------------------------------------------------------
             ->actions([
-                Tables\Actions\Action::make('ticket_pdf')
-                    ->label('Ticket')
-                    ->icon('heroicon-m-printer')
-                    ->color('success')
-                    ->action(fn (Invoice $record) => self::downloadTicketPdf($record)),
+                Tables\Actions\Action::make('cobrar_qr')
+                    ->label('Cobrar QR')
+                    ->icon('heroicon-m-qr-code')
+                    ->color('warning')
+                    ->visible(fn (Invoice $record): bool => ! $record->trashed() && empty($record->mp_order_id) && $record->payment_status !== 'completed')
+                    ->requiresConfirmation()
+                    ->modalHeading('Cobro Presencial con Código QR')
+                    ->modalDescription(fn (Invoice $record) => "Se emitirá una orden de pago por $ " . number_format($record->total, 2, ',', '.') . " a la Caja 1. El cliente deberá escanear el cartel QR de la caja con su app de Mercado Pago.")
+                    ->modalSubmitActionLabel('Enviar a Caja 1')
+                    ->action(function (Invoice $record) {
+                        $mp = app(MercadoPagoService::class);
+                        $mp->cancelAnyActiveCajaOrder('CAJA1');
+                        $order = $mp->createQrOrder(
+                            amount: (float) $record->total,
+                            description: "Factura FC {$record->invoice_type} {$record->point_of_sale}-{$record->receipt_number}",
+                            externalReference: "INV-{$record->id}",
+                            posId: 'CAJA1'
+                        );
 
-                Tables\Actions\ViewAction::make()
-                    ->modalHeading('Detalle del Comprobante Fiscal')
-                    ->modalWidth(MaxWidth::FourExtraLarge),
+                        if ($order && isset($order['id'])) {
+                            $record->update([
+                                'mp_order_id'    => $order['id'],
+                                'payment_status' => 'pending',
+                            ]);
 
-                // Se usa DeleteAction como 'Anular' (baja lógica) y se oculta si ya fue anulada para no devolver stock dos veces
-                Tables\Actions\DeleteAction::make()
-                    ->label('Anular')
-                    ->modalHeading('Anular Factura (Irreversible)')
-                    ->modalDescription('¿Estás seguro de anular esta factura? Se reintegrará el stock de los productos al depósito y el comprobante quedará registrado como ANULADO.')
-                    ->hidden(fn (Invoice $record): bool => $record->trashed()),
+                            Notification::make()
+                                ->title('Cobro enviado a Caja 1')
+                                ->body('La orden está activa en la Caja 1. El cliente puede escanear el cartel QR para pagar.')
+                                ->actions([
+                                    \Filament\Notifications\Actions\Action::make('ver_cartel')
+                                        ->label('Ver QR en Pantalla')
+                                        ->url('/img/qr/caja1_qr.png', shouldOpenInNewTab: true),
+                                ])
+                                ->success()
+                                ->send();
+                        } else {
+                            Notification::make()
+                                ->title('Error al conectar con Mercado Pago')
+                                ->body('No se pudo enviar la orden a la Caja 1. Verificá la configuración.')
+                                ->danger()
+                                ->send();
+                        }
+                    }),
+
+                Tables\Actions\Action::make('ver_qr_cartel')
+                    ->label('Cartel QR')
+                    ->icon('heroicon-m-qr-code')
+                    ->color('warning')
+                    ->visible(fn (Invoice $record) => $record->payment_status === 'pending' && !$record->trashed())
+                    ->modalHeading(fn (Invoice $record) => "Cobro QR Mostrador · Caja 1 (FC {$record->invoice_type} {$record->point_of_sale}-{$record->receipt_number})")
+                    ->modalDescription(fn (Invoice $record) => "Monto a cobrar: $ " . number_format((float) $record->total, 2, ',', '.') . " ARS")
+                    ->modalContent(fn (Invoice $record) => view('filament.modals.qr-caja1', ['record' => $record]))
+                    ->modalSubmitAction(false)
+                    ->modalCancelActionLabel('Cerrar Ventana'),
+
+                Tables\Actions\ActionGroup::make([
+                    Tables\Actions\ViewAction::make()
+                        ->label('Ver Detalle')
+                        ->modalHeading('Detalle del Comprobante Fiscal')
+                        ->modalWidth(MaxWidth::FourExtraLarge)
+                        ->extraModalFooterActions([
+                            Tables\Actions\Action::make('modal_ticket_pdf')
+                                ->label('Imprimir Ticket Fiscal (PDF)')
+                                ->icon('heroicon-m-printer')
+                                ->color('success')
+                                ->action(fn (Invoice $record) => self::downloadTicketPdf($record)),
+
+                            Tables\Actions\DeleteAction::make('modal_anular')
+                                ->label('Anular y Devolver Dinero')
+                                ->modalHeading('Anular Factura y Devolución')
+                                ->modalDescription(function (Invoice $record): string {
+                                    $desc = '¿Estás seguro de anular esta factura? Se reintegrará el stock de los productos al depósito y el comprobante quedará registrado como ANULADO.';
+                                    if (!empty($record->mp_payment_id) || !empty($record->mp_order_id)) {
+                                        $desc .= ' ⚠️ Esta venta fue cobrada mediante Mercado Pago ($ ' . number_format((float)$record->total, 2, ',', '.') . '). Al anularla, el sistema ordenará la DEVOLUCIÓN AUTOMÁTICA DEL DINERO al comprador.';
+                                    }
+                                    return $desc;
+                                })
+                                ->hidden(fn (Invoice $record): bool => $record->trashed()),
+                        ]),
+
+                    Tables\Actions\Action::make('ticket_pdf')
+                        ->label('Imprimir Ticket')
+                        ->icon('heroicon-m-printer')
+                        ->color('success')
+                        ->action(fn (Invoice $record) => self::downloadTicketPdf($record)),
+
+                    Tables\Actions\Action::make('cancelar_qr')
+                        ->label('Liberar Caja')
+                        ->icon('heroicon-m-x-circle')
+                        ->color('danger')
+                        ->visible(fn (Invoice $record): bool => ! empty($record->mp_order_id) && $record->payment_status !== 'completed')
+                        ->requiresConfirmation()
+                        ->modalHeading('Cancelar cobro en Caja 1')
+                        ->modalDescription('¿Deseás cancelar la orden activa en la Caja 1 para liberar el punto de venta?')
+                        ->action(function (Invoice $record) {
+                            $mp = app(MercadoPagoService::class);
+                            $mp->cancelQrOrder($record->mp_order_id);
+                            $record->update(['mp_order_id' => null]);
+
+                            Notification::make()
+                                ->title('Caja 1 liberada')
+                                ->body('La orden fue cancelada de la caja.')
+                                ->warning()
+                                ->send();
+                        }),
+
+                    // Se usa DeleteAction como 'Anular' (baja lógica) y se oculta si ya fue anulada para no devolver stock dos veces
+                    Tables\Actions\DeleteAction::make()
+                        ->label('Anular')
+                        ->modalHeading('Anular Factura y Devolución')
+                        ->modalDescription(function (Invoice $record): string {
+                            $desc = '¿Estás seguro de anular esta factura? Se reintegrará el stock de los productos al depósito y el comprobante quedará registrado como ANULADO.';
+                            if (!empty($record->mp_payment_id) || !empty($record->mp_order_id)) {
+                                $desc .= ' ⚠️ Esta venta fue cobrada mediante Mercado Pago ($ ' . number_format((float)$record->total, 2, ',', '.') . '). Al anularla, el sistema ordenará la DEVOLUCIÓN AUTOMÁTICA DEL DINERO al comprador.';
+                            }
+                            return $desc;
+                        })
+                        ->hidden(fn (Invoice $record): bool => $record->trashed()),
+                ]),
             ]);
     }
 

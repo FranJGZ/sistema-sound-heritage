@@ -4,7 +4,6 @@ namespace App\Providers\Filament;
 
 use App\Filament\Admin\Pages\Dashboard;
 use App\Filament\Admin\Widgets\AlertasTiendaTable;
-use App\Filament\Admin\Widgets\AnalisisMargenProductosChart;
 use App\Filament\Admin\Widgets\CrecimientoClientesChart;
 use App\Filament\Admin\Widgets\DistribucionMontoFacturasChart;
 use App\Filament\Admin\Widgets\SegmentacionClientesChart;
@@ -66,7 +65,6 @@ class AdminPanelProvider extends PanelProvider
                 TopProductosIngresosChart::class,
                 SegmentacionClientesChart::class,
                 DistribucionMontoFacturasChart::class,
-                AnalisisMargenProductosChart::class,
             ])
             ->middleware([
                 EncryptCookies::class,

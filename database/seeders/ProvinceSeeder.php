@@ -1,10 +1,43 @@
 <?php
+
 namespace Database\Seeders;
-use Illuminate\Database\Seeder;
+
 use App\Models\Province;
-class ProvinceSeeder extends Seeder {
-    public function run() { 
-        $provinces = [['name' => 'Misiones'], ['name' => 'Corrientes'], ['name' => 'Chaco'], ['name' => 'Formosa'], ['name' => 'Entre Ríos']];
-        foreach ($provinces as $prov) { Province::create($prov); }
+use Illuminate\Database\Seeder;
+
+class ProvinceSeeder extends Seeder
+{
+    public function run(): void
+    {
+        $provinces = [
+            'Misiones',
+            'Corrientes',
+            'Chaco',
+            'Formosa',
+            'Entre Ríos',
+            'Buenos Aires',
+            'Ciudad Autónoma de Buenos Aires',
+            'Córdoba',
+            'Santa Fe',
+            'Mendoza',
+            'Tucumán',
+            'Salta',
+            'Jujuy',
+            'Santiago del Estero',
+            'San Juan',
+            'San Luis',
+            'Catamarca',
+            'La Rioja',
+            'La Pampa',
+            'Neuquén',
+            'Río Negro',
+            'Chubut',
+            'Santa Cruz',
+            'Tierra del Fuego, Antártida e Islas del Atlántico Sur',
+        ];
+
+        foreach ($provinces as $name) {
+            Province::firstOrCreate(['name' => $name]);
+        }
     }
 }

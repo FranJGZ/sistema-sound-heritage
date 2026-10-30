@@ -133,7 +133,7 @@
 
             <!-- Cuerpo del mensaje -->
             <div class="content">
-                <h2 class="greeting">¡Hola, {{ $user->name ?? 'Usuario' }}! 🔑</h2>
+                <h2 class="greeting">¡Hola, {{ $user->name ?? 'Usuario' }}!</h2>
                 <p class="text">
                     Recibimos una solicitud para restablecer la contraseña de tu cuenta en <strong>Sound Heritage</strong>. Para generar una nueva contraseña segura, por favor hacé clic en el siguiente botón:
                 </p>
@@ -146,7 +146,7 @@
 
                 <div class="info-box">
                     <p class="info-text">
-                        🔒 <strong>Aviso de seguridad:</strong> Este enlace de restablecimiento es de un solo uso y expirará en {{ config('auth.passwords.'.config('auth.defaults.passwords').'.expire', 60) }} minutos. Si vos no solicitaste este cambio, podés ignorar este correo de forma segura; tu contraseña actual no será modificada.
+                        <strong>Aviso de seguridad:</strong> Este enlace de restablecimiento es de un solo uso y expirará en {{ config('auth.passwords.'.config('auth.defaults.passwords').'.expire', 60) }} minutos. Si vos no solicitaste este cambio, podés ignorar este correo de forma segura; tu contraseña actual no será modificada.
                     </p>
                 </div>
 

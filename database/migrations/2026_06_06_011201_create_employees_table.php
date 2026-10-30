@@ -10,6 +10,7 @@ return new class extends Migration {
             $table->string('document_number'); 
             $table->string('last_name'); 
             $table->string('first_name'); 
+            $table->string('photo')->nullable();
             $table->string('address'); 
             $table->string('phone'); 
             $table->foreignId('city_id')->constrained('cities'); 

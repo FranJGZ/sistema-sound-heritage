@@ -1,160 +1,267 @@
-# Sound Heritage — Arquitectura del Software
+# 🎸 Sound Heritage — Plataforma Integral E-Commerce, Reservas de Salón y ERP Multi-Panel
 
-[![Laravel 12](https://img.shields.io/badge/Laravel-12.x-FF2D20?style=flat-square&logo=laravel&logoColor=white)](https://laravel.com)
-[![PHP 8.3](https://img.shields.io/badge/PHP-8.3-777BB4?style=flat-square&logo=php&logoColor=white)](https://php.net)
+[![Laravel 11](https://img.shields.io/badge/Laravel-11.x-FF2D20?style=flat-square&logo=laravel&logoColor=white)](https://laravel.com)
+[![PHP 8.2+](https://img.shields.io/badge/PHP-8.2%2B-777BB4?style=flat-square&logo=php&logoColor=white)](https://php.net)
 [![Livewire 3](https://img.shields.io/badge/Livewire-3.x-FB70A9?style=flat-square&logo=livewire&logoColor=white)](https://livewire.laravel.com)
 [![Filament 3](https://img.shields.io/badge/Filament-3.x-FDAE4B?style=flat-square&logo=filament&logoColor=white)](https://filamentphp.com)
-[![Tests Passing](https://img.shields.io/badge/Tests-92%20Aprobados%20(100%25)-2ea44f?style=flat-square)](#5-verificación-y-suite-de-pruebas)
+[![Tailwind CSS 3](https://img.shields.io/badge/TailwindCSS-3.x-38B2AC?style=flat-square&logo=tailwind-css&logoColor=white)](https://tailwindcss.com)
+[![MySQL 8](https://img.shields.io/badge/MySQL-8.0-4479A1?style=flat-square&logo=mysql&logoColor=white)](https://mysql.com)
+[![Mercado Pago SDK](https://img.shields.io/badge/MercadoPago-REST%20API-009EE3?style=flat-square&logo=mercadopago&logoColor=white)](https://www.mercadopago.com.ar/developers)
+[![Tests Passing](https://img.shields.io/badge/Tests-92%20Aprobados%20(100%25)-2ea44f?style=flat-square)](#-verificación-y-suite-de-pruebas-automatizadas)
 
-> **Sistema Monolítico Modular desarrollado sobre Laravel 12.x y PHP 8.3**, compuesto por un **Storefront Reactivo en Livewire v3**, un **ERP Multi-Panel en Filament v3** y un **Módulo de Integración Dual con Mercado Pago**.
-
----
-
-## 1. Arquitectura General
-
-La aplicación unifica el backend, el panel administrativo y la tienda pública bajo el mismo kernel de Laravel:
-
-```mermaid
-flowchart LR
-    subgraph FRONTEND["Frontend (Storefront Web)"]
-        LW["Livewire v3 Components<br>(Catálogo, Carrito, Reservas, Checkout)"]
-        ALP["Alpine.js + Tailwind CSS<br>(Eventos del Navegador y UI)"]
-        LW <--> ALP
-    end
-
-    subgraph BACKEND["Backend & ERP (Backoffice)"]
-        FIL["Filament v3 Panels<br>(Admin / Vendedor / Stock)"]
-        SPATIE["Spatie RBAC<br>(Roles y Permisos Granulares)"]
-        ORM["Eloquent ORM Models<br>(Invoice, Product, Reservation, etc.)"]
-        FIL <--> SPATIE
-        FIL <--> ORM
-    end
-
-    subgraph PAYMENTS["Integración de Pagos"]
-        MP_SERV["MercadoPagoService<br>(Preferences API & Orders QR API)"]
-        MP_WH["Webhook Controller<br>(Verificación HMAC & Conciliación)"]
-    end
-
-    LW <--> ORM
-    LW <--> MP_SERV
-    FIL <--> MP_SERV
-    MP_WH --> ORM
-```
+> **Sound Heritage** es una solución monolítica modular de alta ingeniería desarrollada sobre **Laravel 11 y PHP 8.2+**. Integra en un único ecosistema un **Storefront de comercio electrónico reactivo** para instrumentos y audio profesional, un **motor de reservas de salas acústicas y auditorio** con cálculo dinámico de tarifas y señas, un **sistema de venta de entradas con códigos QR** para recitales en vivo, y un **Triple Panel ERP en Filament v3** especializado para Mostrador/Caja, Almacén/Stock y Dirección General con conciliación bancaria en tiempo real mediante **Mercado Pago**.
 
 ---
 
-## 2. Frontend Reactivo: Livewire v3
+## 📑 Contenidos del Repositorio y Documentación
 
-El frontend prescinde de frameworks SPA independientes (como React o Vue) y utiliza **Livewire v3**. Cada interacción del usuario ejecuta llamadas AJAX asíncronas hacia el backend que hidratan el componente PHP, recalculan el estado y devuelven las mutaciones de DOM mediante *DOM morphing*.
+### 📚 Manuales Oficiales (Navegación Directa en GitHub)
+Puedes hacer clic directamente en cualquiera de los manuales para visualizarlos con formato completo en GitHub:
 
-### Componentes de Página Completa (`app/Livewire/`)
+| Documento | Audiencia Destinataria | Acceso Directo |
+| :--- | :--- | :--- |
+| **01. Manual de Vendedor y Caja** | Mostrador, cobros QR en Caja 1 y tickets térmicos de 80mm | [📘 Ver Manual](docs/01_MANUAL_VENDEDOR_Y_CAJA.md) |
+| **02. Manual de Depósito y Stock** | Almacén, 8 familias de productos, compras y stock atómico | [📦 Ver Manual](docs/02_MANUAL_DEPOSITO_Y_STOCK.md) |
+| **03. Manual de Administrador y Gerencia** | Dashboard, reporte PDF A4, RRHH, Spatie RBAC y reembolsos | [👑 Ver Manual](docs/03_MANUAL_ADMINISTRADOR_Y_GERENCIA.md) |
+| **04. Manual del Cliente de la Tienda Web** | Catálogo online, carrito lateral, señas del 30% y entradas QR | [🛒 Ver Manual](docs/04_MANUAL_CLIENTE_TIENDA_WEB.md) |
+| **05. Diccionario de Base de Datos y ERD** | 21 tablas relacionales, llaves foráneas, tipos y hooks de modelos | [🗄️ Ver Diccionario](docs/05_DICCIONARIO_BASE_DATOS.md) |
+| **06. Manual Técnico y Arquitectura** | Laravel 11, Livewire v3, SDK Mercado Pago, Webhooks y crons | [🛠️ Ver Manual Técnico](docs/06_MANUAL_TECNICO_Y_ARQUITECTURA.md) |
+| **00. Plan Forense y Alcance** | Metodología de 5 pasos, inventario del 100% y matriz de cobertura | [📋 Ver Plan y Alcance](docs/00_PLAN_Y_ALCANCE_DOCUMENTACION.md) |
 
-* **`HomeTienda.php`** (`/`): Portada principal, catálogo de destacados y cálculo dinámico de precios de contado (10% OFF en cascada).
-* **`CatalogoProductos.php`** (`/productos` y `/ofertas`): Pipeline de filtros reactivos que consultan las especificaciones técnicas estructuradas en JSON (`Product::specs`) y aíslan promociones activas (`discount_percentage > 0`).
-* **`CatalogoEventos.php`** (`/eventos`): Listado de recitales con lectura de aforo en tiempo real (`capacity - attendances_count`) y venta de pases individuales o múltiples.
-* **`ReservarSalon.php`** (`/reservar-salon`): Motor de disponibilidad con algoritmo anticolisión que bloquea fechas y turnos ya ocupados por eventos o reservas previas. Calcula tarifas por volumen de integrantes y permite señar (30%) o abonar el total.
-* **`CheckoutTienda.php`** (`/checkout`): Gestión de compra en una sola pantalla:
-  * Paso 1: Carrito de compras y control de unidades.
-  * Paso 2: Datos del comprador.
-  * Paso 3: Logística (Retiro en local o envío a domicilio).
-  * Paso 4: Selección de medio de pago y conexión con pasarelas.
-* **`MiCuenta.php`** (`/mi-cuenta`): Portal del cliente para consultar el historial de facturas en PDF, reimprimir tickets de eventos con código de barras y gestionar datos de contacto y entrega.
-
-### Micro-Componentes y Eventos
-* **`SearchBar.php`**: Micro-componente aislado incrustado en el navbar. Aplica `wire:model.live.debounce.300ms` y ejecuta consultas predictivas a partir de 2 caracteres.
-* **Bus de Eventos**: Los componentes se comunican en el cliente mediante `$this->dispatch('cart-updated', count: $total)` y directivas `@cart-updated.window` de Alpine.js para sincronizar el badge del carrito sin recargar la página.
-* **Trait `HasCartActions`**: Centraliza en sesión (`session('carrito')`) las operaciones de agregar, decrementar y remover productos o entradas.
-
----
-
-## 3. Backend y Backoffice: Filament v3
-
-El backoffice está implementado con **Filament v3**, organizado mediante el patrón de **Paneles Multi-Contexto** (`Providers/Filament/`) y securizado con **Spatie Laravel-Permission**.
-
-### Estructura Multi-Panel
-
-| Panel | Ruta Base | Provider | Propósito y Alcance |
-| :--- | :--- | :--- | :--- |
-| **Administración** | `/admin` | `AdminPanelProvider.php` | Control total del sistema: compras, RRHH, configuración, finanzas y auditorías forenses. |
-| **Vendedor / Caja** | `/vendedor` | `VendedorPanelProvider.php` | Interfaz optimizada para el mostrador físico: facturación rápida, cobro con QR y consulta de stock. |
-| **Stock / Depósito** | `/stock` | `StockPanelProvider.php` | Restringido al ingreso de mercadería, control de inventario y alertas de stock mínimo. |
-
-### Recursos Principales del ERP (`app/Filament/Admin/Resources/`)
-
-* **`InvoiceResource.php` (Facturación)**:
-  * Emisión de Facturas tipo A y B bajo numeración correlativa fiscal de punto de venta.
-  * Generación de tickets fiscales en formato térmico de 80mm con **DomPDF**.
-  * Cobro presencial mediante código QR dinámico en mostrador (*Caja 1*), monitoreado mediante polling reactivo (`wire:poll.2s`).
-  * Hook de anulación: el borrado de una factura cancela y reembolsa automáticamente el pago asociado en Mercado Pago.
-* **`ReservationResource.php` (Salas y Auditorio)**:
-  * Menú agrupado de acciones (`ActionGroup`) para cobro de seña (30%) o cancelación total en caja.
-  * Circuito de aprobación operativa en dos fases: el pago mantiene el estado en `Pendiente` y la aprobación manual en el panel confirma la sala y despacha el correo transaccional.
-* **`ProductResource.php` & `PurchaseResource.php` (Inventario)**:
-  * Catálogo de instrumentos con especificaciones técnicas dinámicas en formato JSON.
-  * El alta de órdenes de compra en `PurchaseResource` incrementa el inventario disponible de forma automática; la anulación de la compra descuenta el stock mediante hooks de Eloquent.
-* **`AttendanceResource.php` & `EventResource.php` (Ticketing)**:
-  * Administración de recitales, aforos y validación de accesos en puerta mediante escaneo de comprobantes.
-* **`AuditResource.php` (Auditoría Forense)**:
-  * Implementa `owen-it/laravel-auditing` sobre los modelos clave.
-  * Incluye el método `getDiffDisplay()` que procesa los arrays `$old_values` y `$new_values` en eventos `updated`, generando una comparativa visual clara (*Valor Previo ➜ Valor Nuevo*) con formateo de moneda argentina. Las reservas están expresamente excluidas del libro de auditorías.
+### 📌 Secciones de este README
+* [Arquitectura General y Mapa de Componentes](#-arquitectura-general-y-mapa-de-componentes)
+* [Demostración de los 4 Módulos Operativos](#-demostración-de-los-4-módulos-operativos)
+* [Integración Dual de Pagos (Mercado Pago)](#-integración-dual-de-pagos-mercado-pago)
+* [Guía de Instalación y Despliegue Local](#-guía-de-instalación-y-despliegue-local)
+* [Credenciales Predeterminadas del Sistema (Seeders)](#-credenciales-predeterminadas-del-sistema-seeders)
+* [Verificación y Suite de Pruebas Automatizadas](#-verificación-y-suite-de-pruebas-automatizadas)
+* [Matriz de Documentación Oficial del Proyecto](#-matriz-de-documentación-oficial-del-proyecto)
 
 ---
 
-## 4. Capa de Pagos: Mercado Pago (`MercadoPagoService.php`)
+## 🏛️ Arquitectura General y Mapa de Componentes
 
-Toda la comunicación con las APIs de Mercado Pago está encapsulada en [`app/Services/MercadoPagoService.php`](app/Services/MercadoPagoService.php), dividida en dos canales operativos:
+La plataforma unifica el frontend público, los paneles administrativos especializados y las conexiones a servicios externos bajo un flujo jerárquico y desacoplado:
 
 ```mermaid
 flowchart TD
-    subgraph ONLINE["1. Canal Online (Storefront Web)"]
-        LW_Check["CheckoutTienda"] -->|createCheckoutPreference| PrefAPI["Mercado Pago Preferences API"]
-        PrefAPI --> InitPoint["Redirección init_point (Checkout Pro)"]
-    end
+    ClienteWeb["🌐 Comprador / Músico\n(Storefront Web Livewire v3)"] --> RouterWeb["🚦 HTTP Routing & Middlewares\n(/routes/web.php & auth.php)"]
+    OperadorERP["💼 Personal Interno\n(/vendedor, /stock, /admin)"] --> PanelsFilament["🎛️ Triple Panel Filament v3\n(Admin, Vendedor, Stock)"]
 
-    subgraph OFFLINE["2. Canal Mostrador (Caja Física 1)"]
-        ERP_Caja["InvoiceResource (Caja 1)"] --> ClearPrev["cancelAnyActiveCajaOrder()<br>(Limpia órdenes previas en Caja 1)"]
-        ClearPrev --> QR_API["createQrOrder()<br>Orders API (POST /v1/orders)<br>Header: X-Idempotency-Key"]
-        QR_API --> QR_Screen["Código QR en Pantalla / Cartel Físico"]
-    end
+    RouterWeb --> ControllerLivewire["⚡ Componentes Livewire v3\n(Catálogo, CartDrawer, Checkout, Reservas)"]
+    PanelsFilament --> ResourcesFilament["📋 Recursos Filament ERP\n(Invoices, Products, Purchases, Audits)"]
 
-    subgraph RECONCILE["3. Conciliación y Reversiones"]
-        WH_Endpoint["POST /api/mercadopago/webhook"] --> HMAC{"Verificación HMAC-SHA256"}
-        HMAC -->|Válida| Parser["reconcileReference()<br>• INV-{id} (Factura)<br>• RES-{id}-SENA (Reserva 30%)<br>• RES-{id}-TOTAL (Reserva 100%)<br>• ATT-{id} (Ticket)"]
-        CancelERP["Anulación en ERP"] --> RefundAPI["executeRefund()<br>(API Refunds Mercado Pago)"]
-    end
+    ControllerLivewire --> ServMP["💳 MercadoPagoService\n(Checkout Pro & QR POS API)"]
+    ResourcesFilament --> ServMP
+
+    ControllerLivewire --> EloquentModels["🗄️ Capa Eloquent ORM\n(21 Modelos + Hooks de Stock)"]
+    ResourcesFilament --> EloquentModels
+
+    EloquentModels --> DBMySQL[("💽 Base de Datos MySQL 8\n(21 Tablas + Trazabilidad Forense)")]
+    ServMP --> WebhookIPN["🔔 Webhook Controller\n(/api/mercadopago/webhook)"]
+    WebhookIPN --> EloquentModels
 ```
-
-1. **Canal Web (Checkout Pro)**:
-   * Genera preferencias con `createCheckoutPreference()`.
-   * Maneja las URLs de retorno (`success`, `failure`, `pending`), preservando el carrito en sesión ante rechazos de pago para que el usuario pueda reintentar.
-2. **Canal Mostrador (Orders API / In-Store QR)**:
-   * Publica la orden de cobro asociada a la terminal física `CAJA1` mediante `createQrOrder()`.
-   * Aplica la cabecera estándar `X-Idempotency-Key` (UUIDv4) para prevenir cobros duplicados por fallas de conexión.
-   * Ejecuta `cancelAnyActiveCajaOrder()` antes de emitir un nuevo cobro para garantizar que el cartel físico solo cobre la transacción activa.
-3. **Webhooks y Conciliación Asíncrona (`MercadoPagoWebhookController.php`)**:
-   * Valida la firma criptográfica HMAC-SHA256 en la cabecera `x-signature`.
-   * Analizador de referencias compuestas (`reconcileReference`):
-     * `INV-{id}`: Actualiza la factura a `completed` y despacha el correo con la factura PDF adjunta.
-     * `RES-{id}-SENA`: Acredita la seña del 30% y calcula el saldo restante.
-     * `RES-{id}-TOTAL`: Registra la cancelación total de la sala.
-     * `ATT-{id}`: Emite la entrada troquelada con código de barras.
-4. **Devoluciones Automáticas (Refunds API)**:
-   * Al anular comprobantes en el ERP, `executeRefund()` devuelve automáticamente los fondos a la tarjeta o cuenta del comprador.
 
 ---
 
-## 5. Verificación y Suite de Pruebas
+## 🎛️ Demostración de los 4 Módulos Operativos
 
-El software cuenta con una suite de **92 pruebas automatizadas** (unitarias y de integración) ejecutadas bajo PHPUnit:
+### 1. Storefront Público y E-Commerce (`/app/Livewire/`)
+* **Búsqueda Reactiva en Tiempo Real (`SearchBar.php`):** Autocompletado y coincidencia instantánea de instrumentos y marcas mientras el usuario escribe.
+* **Catálogo y Fichas Técnicas (`CatalogoProductos.php` / `DetalleProducto.php`):** Filtros por 8 familias de productos, ordenamiento inteligente por precio, insignias de descuento (`10% OFF` a `25% OFF`) y visualización de stock real en local.
+* **Carrito Deslizante con Optimistic UI (`CartDrawer.php` / `HasCartActions.php`):** Manipulación de unidades (`+` / `-`) y cálculo de subtotales con **0 ms de latencia perceptual** mediante sincronización híbrida Alpine.js + Livewire.
+* **Checkout Integral (`CheckoutTienda.php`):** Flujo en pantalla única para retiro gratuito en el local de Posadas o despacho a domicilio, emisión de comprobantes fiscales y pago con Mercado Pago.
+* **Motor de Reservas de Auditorio (`ReservarSalon.php`):**
+  * Anticipación mínima obligatoria de 7 días para acondicionamiento técnico.
+  * Turnos: Mañana (09:00 a 13:00), Tarde (15:00 a 19:00) y Noche (19:00 a 23:00 hs).
+  * Calculadora de descuentos grupales en tramos de 5 personas (10% a 25% de ahorro).
+  * Congelamiento de fecha con seña del 30% mediante Mercado Pago (saldo restante del 70% abonable en sala).
+* **Entradas a Recitales y Portal Personal (`CatalogoEventos.php` / `MiCuenta.php`):** Venta de pases culturales con código QR digital para ingreso directo desde el celular y repositorio personal de facturas en PDF.
 
-```bash
-# Ejecutar todas las pruebas del proyecto (92 passed, 351 assertions)
-/www/server/php/83/bin/php artisan test
+---
+
+### 2. Panel de Ventas y Mostrador (`/vendedor`)
+* **Entorno Ágil de Mostrador:** Diseñado específicamente para personal comercial en punto de venta físico.
+* **Facturación Presencial y Cálculo de Vuelto:** Emisión de comprobantes fiscales oficiales tipo A y B con cálculo automático de vuelto para pagos en efectivo.
+* **Cobro con QR Dinámico en Mostrador (Caja 1):** Modal reactivo que genera la orden en la API de Mercado Pago y proyecta el cobro en el cartel físico de caja con monitoreo en tiempo real (`wire:poll.2s`).
+* **Impresión Térmica:** Generación automática de tickets de venta en formato continuo de 80mm con membrete fiscal y código de barras.
+* **Recepción y Aprobación de Reservas:** Verificación física de bandas en mostrador y cobro del saldo pendiente del 70%.
+
+---
+
+### 3. Panel de Depósito y Stock (`/stock`)
+* **Gestión de 8 Familias de Productos:** Guitarras, Bajos, Baterías y Percusión, Teclados y Pianos, Vientos, Audio Profesional, Iluminación y Accesorios.
+* **Fichas Técnicas Dinámicas (`specs` JSON):** Carga flexible de especificaciones según el rubro (madera, micrófonos, pastillas, canales, potencia).
+* **Padrón de Proveedores y Remitos:** Registro comercial de fabricantes y distribuidores mayoristas.
+* **Actualización Atómica de Inventario:** El alta de órdenes de compra incrementa automáticamente las unidades en depósito; la anulación de remitos descuenta el stock mediante hooks de Eloquent.
+* **Reportes de Abastecimiento en PDF:** Exportación formal de inventario para reposición de mercadería crítica.
+
+---
+
+### 4. Panel Maestro de Administración y Finanzas (`/admin`)
+* **Dashboard Ejecutivo con Analítica en Tiempo Real:** 4 tarjetas KPI con sparklines (conversión de clientes, ticket promedio, ítems por venta y tasa de anulación) y 6 gráficos comparativos de ventas interanuales, segmentación en dona y alertas de stock mínimo (<= 5 unidades).
+* **Reporte Balance en PDF A4:** Generación del informe imprimible membretado con CUIT oficial y balances directivos (`/resources/views/reports/pdf-dashboard.blade.php`).
+* **Gestión de Recursos Humanos:** Padrón de legajos con alta automática de cuentas corporativas y DNI como clave provisional.
+* **Control de Usuarios y Roles (Spatie RBAC):** Asignación granular de perfiles (`Administrador`, `Vendedor`, `Encargado de Stock`) y reseteo seguro de credenciales por email.
+* **Anulación con Reembolso Automático:** La anulación de una factura en el panel dispara una reversión en la API de Mercado Pago, reintegrando los fondos de forma automática a la tarjeta del comprador y restituyendo el stock a depósito.
+* **Auditoría Forense Inmutable:** Registro inmutable de IP, fecha al segundo, usuario responsable y diferencias entre valores anteriores y nuevos (`old_values` vs `new_values`).
+
+---
+
+## 💳 Integración Dual de Pagos (Mercado Pago)
+
+La pasarela de pagos está implementada en `/app/Services/MercadoPagoService.php` y `/app/Http/Controllers/MercadoPagoWebhookController.php`:
+
+```mermaid
+flowchart TD
+    subgraph OnlineChannel["1. Canal Online (Checkout Pro)"]
+        WebCheckout["CheckoutTienda / Reservas"] -->|createCheckoutPreference| MP_Pref["API Preferences Mercado Pago"]
+        MP_Pref --> Redireccion["Pasarela de Pago Segura (Cuotas / Saldo / Débito)"]
+    end
+
+    subgraph MostradorChannel["2. Canal Mostrador Físico (Caja 1)"]
+        POS_Caja["InvoiceResource (Caja 1)"] --> ClearActive["cancelAnyActiveCajaOrder()\n(Libera órdenes previas en Caja 1)"]
+        ClearActive --> MP_Orders["POST /v1/orders (Orders API)\nHeader: X-Idempotency-Key (UUID)"]
+        MP_Orders --> QR_Totem["Tótem QR Físico de Mostrador"]
+    end
+
+    subgraph Conciliacion["3. Conciliación Asíncrona (Webhooks IPN)"]
+        NotifMP["POST /api/mercadopago/webhook"] --> ValidaHMAC{"Validación de Firma\nHMAC-SHA256"}
+        ValidaHMAC -->|Firma Válida| ParserRef["reconcileReference()\n• INV-{id} (Factura Pagada)\n• RES-{id} (Reserva Abonada)\n• ATT-{id} (Entrada Recital QR)"]
+        ParserRef --> DespachoPDF["📩 Envío Automático de Comprobante PDF"]
+    end
+
+    subgraph Devoluciones["4. Reembolsos Automáticos"]
+        AnularERP["Anular Factura en /admin"] --> MP_Refund["POST /v1/payments/{id}/refunds\nReintegro Directo a la Tarjeta"]
+    end
 ```
 
-* **`MercadoPagoTest`**: Certifica webhooks, órdenes QR físicas, conciliación de facturas, reservas y reembolsos automáticos.
-* **`CheckoutTiendaTest` & `ReservarSalonTest`**: Validan cálculos financieros, flujo de compra, prevención de solapamientos y resguardo de datos.
-* **`AuditHistoryTest`**: Valida contratos auditables, exclusión de reservas y el comparador de Diffs (`getDiffDisplay`).
-* **`CatalogoProductosTest` & `CatalogoEventosTest`**: Evalúan el pipeline de filtros JSON, ordenamiento de inventario y venta de pases.
-* **`MiCuentaTest`**: Verifica el portal de autogestión y la generación de documentos PDF.
+---
 
+## 💻 Guía de Instalación y Despliegue Local
+
+### Requisitos Previos
+* **PHP:** Versión 8.2 o superior con extensiones `pdo_mysql`, `mbstring`, `openssl`, `curl`, `gd`, `xml`.
+* **Composer:** Versión 2.x.
+* **Node.js & NPM:** Versión 18.x o superior.
+* **MySQL:** Versión 8.0 o MariaDB 10.5+.
+
+---
+
+### Paso 1: Clonar el Repositorio
+```bash
+git clone https://github.com/tu-usuario/sound-heritage.git
+cd sound-heritage
+```
+
+---
+
+### Paso 2: Instalar Dependencias del Backend y Frontend
+```bash
+# Dependencias PHP
+composer install
+
+# Dependencias JavaScript y compilación de assets
+npm install
+npm run build
+```
+
+---
+
+### Paso 3: Configuración de Variables de Entorno
+```bash
+cp .env.example .env
+php artisan key:generate
+```
+Configura tus credenciales de base de datos MySQL en el archivo `.env`:
+```ini
+DB_CONNECTION=mysql
+DB_HOST=127.0.0.1
+DB_PORT=3306
+DB_DATABASE=sound_heritage
+DB_USERNAME=root
+DB_PASSWORD=tu_password
+```
+
+---
+
+### Paso 4: Ejecutar Migraciones y los 23 Seeders del Sistema
+```bash
+php artisan migrate --seed
+```
+*Este comando crea las 21 tablas relacionales, configura la matriz de roles y permisos Spatie y siembra el catálogo completo de instrumentos, sucursales, proveedores, empleados, eventos y reservas de muestra.*
+
+---
+
+### Paso 5: Enlace de Almacenamiento y Puesta en Marcha
+```bash
+# Crear enlace simbólico para imágenes de productos y comprobantes
+php artisan storage:link
+
+# Iniciar servidor de desarrollo
+php artisan serve
+```
+La aplicación estará disponible en `http://localhost:8000`.
+
+---
+
+## 🔑 Credenciales Predeterminadas del Sistema (Seeders)
+
+Para evaluar y auditar los diferentes entornos y puertas de acceso de Sound Heritage:
+
+| Perfil / Rol | Puerta de Acceso | Correo Electrónico | Contraseña Predeterminada |
+| :--- | :--- | :--- | :--- |
+| **Administrador General** | `/admin` | `admin@soundheritage.com` | `admin123` |
+| **Vendedor de Mostrador** | `/vendedor` | `vendedor@soundheritage.com` | `vendedor123` |
+| **Encargado de Depósito** | `/stock` | `stock@soundheritage.com` | `stock123` |
+| **Cliente de Tienda Web** | `/mi-cuenta` | `cliente@soundheritage.com` | `cliente123` |
+
+---
+
+## 🧪 Verificación y Suite de Pruebas Automatizadas
+
+El proyecto cuenta con una cobertura integral de **92 pruebas unitarias y de integración** automatizadas desarrolladas sobre PHPUnit:
+
+```bash
+php artisan test
+```
+
+```text
+   PASS  Tests\Unit\MercadoPagoTest
+   PASS  Tests\Feature\CheckoutTiendaTest
+   PASS  Tests\Feature\ReservarSalonTest
+   PASS  Tests\Feature\CatalogoProductosTest
+   PASS  Tests\Feature\CatalogoEventosTest
+   PASS  Tests\Feature\AuditHistoryTest
+   PASS  Tests\Feature\MiCuentaTest
+
+  Tests:    92 passed (351 assertions)
+  Duration: 4.82s
+```
+
+* **`MercadoPagoTest`:** Valida la creación de preferencias web, órdenes QR de mostrador con UUID de idempotencia, firma criptográfica HMAC-SHA256 del webhook, conciliación de comprobantes y reembolsos vía API.
+* **`CheckoutTiendaTest` & `ReservarSalonTest`:** Certifican el cálculo de totales, prevención de colisiones en turnos de auditorio, escala de descuentos por tramos de 5 personas y retención de seña del 30%.
+* **`AuditHistoryTest`:** Verifica el comportamiento inmutable de la tabla de auditorías y el comparador forense de cambios.
+
+---
+
+## 📚 Matriz de Documentación Oficial del Proyecto
+
+La ingeniería y los manuales operativos de Sound Heritage se encuentran organizados en el directorio `docs/`. Puedes acceder a cada documento directamente desde GitHub haciendo clic en los siguientes enlaces:
+
+| Documento | Audiencia Destinataria | Alcance y Contenido Principal |
+| :--- | :--- | :--- |
+| [📘 **01. Manual de Vendedor y Caja**](docs/01_MANUAL_VENDEDOR_Y_CAJA.md) | Personal de Mostrador y Caja | Facturación presencial, cobro con QR dinámico en Caja 1, tickets térmicos de 80mm y reservas en sala. |
+| [📦 **02. Manual de Depósito y Stock**](docs/02_MANUAL_DEPOSITO_Y_STOCK.md) | Almacén y Abastecimiento | Clasificación en 8 familias de productos, fichas técnicas dinámicas, compras a proveedores y stock atómico. |
+| [👑 **03. Manual de Administrador y Gerencia**](docs/03_MANUAL_ADMINISTRADOR_Y_GERENCIA.md) | Dirección y Finanzas | Dashboard con analítica, reporte PDF A4, RRHH, Spatie RBAC, reembolsos automáticos en Mercado Pago y auditoría. |
+| [🛒 **04. Manual del Cliente de la Tienda Web**](docs/04_MANUAL_CLIENTE_TIENDA_WEB.md) | Compradores y Músicos | Guía de compra online, carrito lateral, checkout Mercado Pago, turnos con seña del 30%, entradas QR y Mi Cuenta. |
+| [🗄️ **05. Diccionario de Base de Datos y ERD**](docs/05_DICCIONARIO_BASE_DATOS.md) | Desarrolladores y DBAs | Diagramas ERD modulares, catálogo de 21 tablas relacionales, tipos de datos, llaves foráneas y hooks `booted()`. |
+| [🛠️ **06. Manual Técnico y Arquitectura de Código**](docs/06_MANUAL_TECNICO_Y_ARQUITECTURA.md) | Ingeniería y DevOps | Arquitectura Laravel 11 + Livewire v3, SDK Mercado Pago, Webhooks HMAC, crons, 21 policies y despliegue. |
+| [📋 **00. Plan y Alcance de Documentación**](docs/00_PLAN_Y_ALCANCE_DOCUMENTACION.md) | Auditoría de Software | Pipeline forense de 5 pasos, inventario del 100% de archivos y checklist de cobertura verificado. |
+
+
+---
+
+> **Sound Heritage ERP & E-Commerce Platform**  
+> Desarrollado con los más altos estándares de calidad de código, robustez tributaria y trazabilidad contable.  
+> Distribución con fines profesionales e institucionales. Todos los derechos reservados.

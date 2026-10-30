@@ -152,6 +152,7 @@ class SupplierResource extends Resource
                     ->sortable()
                     ->toggleable(isToggledHiddenByDefault: true),
             ])
+            ->defaultSort('created_at', 'desc')
 
             // -----------------------------------------------------------------
             // B) FILTROS DE BÚSQUEDA
@@ -167,26 +168,25 @@ class SupplierResource extends Resource
             // -----------------------------------------------------------------
             // C) ACCIONES POR FILA Y MASIVAS
             // -----------------------------------------------------------------
+            ->recordUrl(fn (Supplier $record): ?string => $record->trashed() ? null : static::getUrl('edit', ['record' => $record]))
             ->actions([
-                Tables\Actions\EditAction::make()
-                    ->color('primary')
-                    ->hidden(fn (Supplier $record): bool => $record->trashed()),
+                Tables\Actions\ActionGroup::make([
+                    Tables\Actions\DeleteAction::make()
+                        ->label('Dar de baja')
+                        ->modalHeading('Dar de baja Proveedor')
+                        ->modalDescription('¿Estás seguro de dar de baja este proveedor? Las compras anteriores se mantendrán registradas intactas.')
+                        ->modalSubmitActionLabel('Sí, dar de baja')
+                        ->successNotificationTitle('Proveedor dado de baja')
+                        ->hidden(fn (Supplier $record): bool => $record->trashed()),
 
-                Tables\Actions\DeleteAction::make()
-                    ->label('Dar de baja')
-                    ->modalHeading('Dar de baja Proveedor')
-                    ->modalDescription('¿Estás seguro de dar de baja este proveedor? Las compras anteriores se mantendrán registradas intactas.')
-                    ->modalSubmitActionLabel('Sí, dar de baja')
-                    ->successNotificationTitle('Proveedor dado de baja')
-                    ->hidden(fn (Supplier $record): bool => $record->trashed()),
-
-                Tables\Actions\RestoreAction::make()
-                    ->label('Reactivar')
-                    ->modalHeading('Reactivar Proveedor')
-                    ->modalDescription('¿Deseas reactivar este proveedor en el sistema?')
-                    ->modalSubmitActionLabel('Sí, reactivar')
-                    ->successNotificationTitle('Proveedor reactivado')
-                    ->visible(fn (Supplier $record): bool => $record->trashed()),
+                    Tables\Actions\RestoreAction::make()
+                        ->label('Reactivar')
+                        ->modalHeading('Reactivar Proveedor')
+                        ->modalDescription('¿Deseas reactivar este proveedor en el sistema?')
+                        ->modalSubmitActionLabel('Sí, reactivar')
+                        ->successNotificationTitle('Proveedor reactivado')
+                        ->visible(fn (Supplier $record): bool => $record->trashed()),
+                ]),
             ])
             ->bulkActions([
                 Tables\Actions\BulkActionGroup::make([

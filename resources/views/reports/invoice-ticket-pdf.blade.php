@@ -88,12 +88,6 @@
             text-align: center;
             margin: 6px 0;
         }
-        .barcode {
-            font-family: 'Courier New', Courier, monospace;
-            font-size: 14px;
-            letter-spacing: -1px;
-            margin-top: 6px;
-        }
         .footer-note {
             font-size: 8.5px;
             color: #333333;
@@ -115,8 +109,8 @@
     <div class="text-center">
         <div class="store-title">SOUND HERITAGE</div>
         <div class="store-sub">{{ $invoice->store?->company_name ?? 'Sound Heritage Casa Central' }}</div>
-        <div class="store-sub">{{ $invoice->store?->address ?? 'Av. Corrientes 1234, CABA' }}</div>
-        <div class="store-sub">Tel: {{ $invoice->store?->phone ?? '011-4555-0199' }}</div>
+        <div class="store-sub">{{ $invoice->store?->address ?? 'Calle Colón 1234, Posadas, Misiones' }}</div>
+        <div class="store-sub">Tel: {{ $invoice->store?->phone ?? '0376-4123456' }}</div>
         <div class="store-sub">CUIT: {{ $invoice->store?->tax_id ?? '30-71558942-9' }}</div>
         <div class="store-sub">IVA: {{ $invoice->store?->tax_condition ?? 'Responsable Inscripto' }}</div>
         <div class="store-sub">
@@ -202,7 +196,7 @@
                 <tr>
                     <td class="text-left">
                         <div>{{ $detail->quantity }} x ${{ number_format((float) $detail->unit_price, 2, ',', '.') }}</div>
-                        <div class="bold">{{ $detail->product?->name ?? 'Producto' }}</div>
+                        <div class="bold">{{ $detail->product?->name ?? ($detail->description ?? 'Producto') }}</div>
                         @if(filled($detail->product?->code))
                             <div style="font-size: 8px; color: #444;">COD: {{ $detail->product->code }}</div>
                         @endif
@@ -266,8 +260,7 @@
             <span class="bold">CAE N°:</span> {{ $cae }}<br>
             <span class="bold">Vto. CAE:</span> {{ \Carbon\Carbon::parse($invoice->due_date)->format('d/m/Y') }}
         </div>
-        <div class="barcode">||| |||| || | |||| ||| || |||| |||</div>
-        <div style="font-size: 8px;">{{ $invoice->point_of_sale }}{{ $invoice->receipt_number }}{{ $cae }}</div>
+        <div style="font-size: 8px; margin-top: 4px;">{{ $invoice->point_of_sale }}{{ $invoice->receipt_number }}{{ $cae }}</div>
 
         <div class="footer-note">
             ¡Gracias por tu compra en <strong>Sound Heritage</strong>!<br>
